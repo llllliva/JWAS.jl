@@ -150,6 +150,24 @@ end
                 @test ids_from_file == original_genotype_ids
             end
 
+            @testset "fast_blocks rescales burnin to outer iterations" begin
+                global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+                model = build_model("y1 = intercept + geno", 1.0)
+                outdir = "fast_blocks_burnin_scaled"
+                output = runMCMC(model, phenotypes,
+                                 chain_length=40,
+                                 burnin=20,
+                                 output_samples_frequency=5,
+                                 output_folder=outdir,
+                                 seed=123,
+                                 memory_guard=:off,
+                                 fast_blocks=true)
+                @test haskey(output, "marker effects geno")
+                samples_file = joinpath(outdir, "MCMC_samples_residual_variance.txt")
+                @test isfile(samples_file)
+                @test length(readlines(samples_file)) > 0
+            end
+
             @test isfile(joinpath("guardrail_off_mode", "IDs_for_individuals_with_genotypes.txt"))
             @test isfile(joinpath("guardrail_off_mode", "IDs_for_individuals_with_phenotypes.txt"))
             @test !isfile("IDs_for_individuals_with_genotypes.txt")

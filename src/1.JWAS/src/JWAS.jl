@@ -272,12 +272,17 @@ function runMCMC(mme::MME,df;
     ############################################################################
     if fast_blocks != false
         if fast_blocks == true
-            block_size = Int(floor(sqrt(mme.M[1].nObs)))
+            # Use training-record count (non-all-missing phenotype rows) for auto block size.
+            block_size = Int(floor(sqrt(length(train_index))))
         elseif typeof(fast_blocks) <: Number
             block_size = Int(floor(fast_blocks))
         end
         mme.MCMCinfo.fast_blocks  = collect(range(1, step=block_size, stop=mme.M[1].nMarkers))
-        mme.MCMCinfo.chain_length = Int(floor(chain_length/(mme.MCMCinfo.fast_blocks[2]-mme.MCMCinfo.fast_blocks[1]))) #number of outer loop
+        outer_step = mme.MCMCinfo.fast_blocks[2]-mme.MCMCinfo.fast_blocks[1]
+        # In block mode, user chain_length/burnin are specified on total-update scale.
+        # Convert both to outer-iteration units used by the MCMC loop.
+        mme.MCMCinfo.chain_length = Int(floor(chain_length/outer_step)) #number of outer loop
+        mme.MCMCinfo.burnin       = Int(floor(burnin/outer_step))
         println("BLOCK SIZE: $block_size")
         flush(stdout)
     end
