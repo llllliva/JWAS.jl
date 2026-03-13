@@ -56,7 +56,7 @@ include("output.jl")
 export build_model,set_covariate,set_random,add_genotypes,get_genotypes,prepare_streaming_genotypes
 export outputMCMCsamples,outputEBV,getEBV
 export solve,runMCMC
-export showMME,describe
+export describe
 #Pedmodule
 export get_pedigree,get_info
 #misc
@@ -625,7 +625,16 @@ function getMCMCinfo(mme)
                 end
                 if !(Mi.method in ["RR-BLUP","BayesL","GBLUP"])
                     if mme.nModels == 1 && mme.MCMCinfo.RRM == false
-                        @printf("%-30s %20s\n","π",Mi.π)
+                        if Mi.annotations !== false && Mi.π isa AbstractVector
+                            pi_min = minimum(Mi.π)
+                            pi_mean = sum(Mi.π) / length(Mi.π)
+                            pi_max = maximum(Mi.π)
+                            pi_summary = @sprintf("%.3f / %.3f / %.3f", pi_min, pi_mean, pi_max)
+                            @printf("%-30s %20s\n","π_j (min/mean/max)",pi_summary)
+                        else
+                            pi_display = (Mi.annotations === false && Mi.π isa AbstractVector) ? Mi.π[1] : Mi.π
+                            @printf("%-30s %20s\n","π",pi_display)
+                        end
                     else
                         println("\nΠ: (Y(yes):included; N(no):excluded)\n")
                         print(string.(mme.lhsVec))
