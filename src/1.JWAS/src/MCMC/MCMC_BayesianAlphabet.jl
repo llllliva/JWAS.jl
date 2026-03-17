@@ -5,9 +5,16 @@ function has_marker_annotations(Mi)
     return Mi.annotations !== false
 end
 
+function _annotation_subset_indices(nmarkers::Integer, count::Integer)
+    return randperm(nmarkers)[1:count]
+end
+
 function initialize_annotation_indicators!(Mi)
     if !has_marker_annotations(Mi) || Mi.nMarkers <= 1
         return nothing
+    end
+    if !(Mi.π isa AbstractVector)
+        Mi.π = fill(Float64(Mi.π), Mi.nMarkers)
     end
     exclude_prob = Mi.π isa AbstractVector ? Float64(Mi.π[1]) : Float64(Mi.π)
     exclude_prob = clamp(exclude_prob, 0.0, 1.0)
@@ -19,12 +26,12 @@ function initialize_annotation_indicators!(Mi)
     if exclude_prob == 0.0
         @info "Annotated BayesC initialization: starting pi=0.0 is degenerate; using 10% excluded markers."
         fill!(delta, included)
-        delta[sample(1:Mi.nMarkers, minority_count; replace=false)] .= excluded
+        delta[_annotation_subset_indices(Mi.nMarkers, minority_count)] .= excluded
         return nothing
     elseif exclude_prob == 1.0
         @info "Annotated BayesC initialization: starting pi=1.0 is degenerate; using 10% included markers."
         fill!(delta, excluded)
-        delta[sample(1:Mi.nMarkers, minority_count; replace=false)] .= included
+        delta[_annotation_subset_indices(Mi.nMarkers, minority_count)] .= included
         return nothing
     end
 
@@ -34,10 +41,10 @@ function initialize_annotation_indicators!(Mi)
 
     if all(iszero, delta)
         @info "Annotated BayesC initialization: sampled all markers as excluded; reinitializing with 10% included markers."
-        delta[sample(1:Mi.nMarkers, minority_count; replace=false)] .= included
+        delta[_annotation_subset_indices(Mi.nMarkers, minority_count)] .= included
     elseif all(isone, delta)
         @info "Annotated BayesC initialization: sampled all markers as included; reinitializing with 10% excluded markers."
-        delta[sample(1:Mi.nMarkers, minority_count; replace=false)] .= excluded
+        delta[_annotation_subset_indices(Mi.nMarkers, minority_count)] .= excluded
     end
     return nothing
 end
@@ -184,11 +191,14 @@ function MCMC_BayesianAlphabet(mme,df)
                     #if methods == "BayesCC"  labels,BigPi,BigPiMean=setPi(Pi)
                 end
             else
-                if Mi.π isa AbstractVector
+                if has_marker_annotations(Mi)
+                    Mi.mean_pi = zeros(Float64, Mi.nMarkers)
+                    Mi.mean_pi2 = zeros(Float64, Mi.nMarkers)
+                elseif Mi.π isa AbstractVector
                     Mi.mean_pi = zeros(eltype(Mi.π), length(Mi.π))
                     Mi.mean_pi2 = zeros(eltype(Mi.π), length(Mi.π))
                 else
-                    Mi.mean_pi,Mi.mean_pi2 = 0.0,0.0      #inclusion probability
+                    Mi.mean_pi,Mi.mean_pi2 = 0.0,0.0
                 end
             end
             if !is_multi_trait && has_marker_annotations(Mi)
@@ -483,15 +493,14 @@ function MCMC_BayesianAlphabet(mme,df)
     ############################################################################
     # After MCMC
     ############################################################################
+    stream_ebv_summaries = false
     if output_samples_frequency != 0
-      for (key,value) in outfile
-        close(value)
-      end
+      stream_ebv_summaries = _finalize_mcmc_sample_outputs!(outfile)
       if causal_structure != false
         close(causal_structure_outfile)
       end
     end
-    if methods == "GBLUP"
+    if methods == "GBLUP" && mme.MCMCinfo.output_marker_parameter_samples == true
         for Mi in mme.M
             mv(output_folder*"/MCMC_samples_marker_effects_variances"*"_"*Mi.name*".txt",
                output_folder*"/MCMC_samples_genetic_variance(REML)"*"_"*Mi.name*".txt")
@@ -502,6 +511,7 @@ function MCMC_BayesianAlphabet(mme,df)
                          mme.solMean,mme.meanVare,
                          mme.pedTrmVec!=0 ? mme.G0Mean : false,
                          mme.solMean2,mme.meanVare2,
-                         mme.pedTrmVec!=0 ? mme.G0Mean2 : false)
+                         mme.pedTrmVec!=0 ? mme.G0Mean2 : false;
+                         stream_ebv_summaries=stream_ebv_summaries)
     return output
 end

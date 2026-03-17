@@ -64,10 +64,6 @@ function errors_args(mme)
                 if Mi.isGRM == true
                     error("storage=:stream MVP does not support GRM/GBLUP inputs.")
                 end
-                if mme.MCMCinfo.outputEBV == true
-                    printstyled("outputEBV is disabled for storage=:stream (MVP limitation).\n",bold=false,color=:red)
-                    mme.MCMCinfo.outputEBV = false
-                end
                 if mme.MCMCinfo.output_heritability == true
                     printstyled("output_heritability is disabled for storage=:stream in MVP.\n",bold=false,color=:red)
                     mme.MCMCinfo.output_heritability = false
@@ -105,6 +101,7 @@ function errors_args(mme)
 end
 
 function check_outputID(mme)
+    is_stream_mode = mme.M != 0 && any(Mi->Mi.storage_mode == :stream,mme.M)
     #***************************************************************************
     #Set default output IDs
     #
@@ -143,10 +140,14 @@ function check_outputID(mme)
     single_step_analysis = mme.MCMCinfo.single_step_analysis
     if single_step_analysis == false && mme.M != 0 #complete genomic data
         if mme.output_ID!=0 && !issubset(mme.output_ID,mme.M[1].obsID)
-            printstyled("Testing individuals are not a subset of ",
-            "genotyped individuals (complete genomic data,non-single-step). ",
-            "Only output EBV for tesing individuals with genotypes.\n",bold=false,color=:red)
-            mme.output_ID = intersect(mme.output_ID,mme.M[1].obsID)
+            if is_stream_mode
+                error("storage=:stream MVP requires output IDs to be a subset of the streaming backend IDs.")
+            else
+                printstyled("Testing individuals are not a subset of ",
+                "genotyped individuals (complete genomic data,non-single-step). ",
+                "Only output EBV for tesing individuals with genotypes.\n",bold=false,color=:red)
+                mme.output_ID = intersect(mme.output_ID,mme.M[1].obsID)
+            end
         end
     elseif mme.ped != false #1)incomplete genomic data 2)PBLUP
         pedID = map(string,collect(keys(mme.ped.idMap)))

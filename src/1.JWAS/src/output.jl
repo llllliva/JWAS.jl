@@ -92,6 +92,160 @@ function outputMCMCsamples(mme::MME,trmStrs::AbstractString...)
     end
 end
 
+mutable struct StreamEBVSampleOutput
+    bin_io::IOStream
+    ids_path::String
+    meta_path::String
+    trait::String
+    ids::Vector{String}
+    nObs::Int
+    nSamples::Int
+    mean::Vector{Float64}
+    mean2::Vector{Float64}
+    buffer32::Vector{Float32}
+end
+
+function _stream_ebv_store(outfile)
+    return get(outfile, "__stream_ebv__", Dict{String,StreamEBVSampleOutput}())
+end
+
+function _is_stream_output_mode(mme)
+    return mme.M != 0 && any(Mi->Mi.storage_mode == :stream, mme.M)
+end
+
+function _stream_ebv_prefix(output_folder::AbstractString, trait_name::AbstractString)
+    return joinpath(output_folder, "MCMC_samples_EBV_" * trait_name)
+end
+
+function _create_stream_ebv_sample_output(output_folder::AbstractString,
+                                          trait_name::AbstractString,
+                                          ids::AbstractVector{<:AbstractString})
+    prefix = _stream_ebv_prefix(output_folder, trait_name)
+    bin_path = prefix * ".bin"
+    ids_path = prefix * ".ids.txt"
+    meta_path = prefix * ".meta"
+
+    _write_string_lines(ids_path, map(String, vec(ids)))
+    bin_io = open(bin_path, "w")
+
+    printstyled("The file $(bin_path) is created to save binary MCMC EBV samples for $(trait_name).\n",
+                bold=false,color=:green)
+
+    return StreamEBVSampleOutput(
+        bin_io,
+        ids_path,
+        meta_path,
+        String(trait_name),
+        map(String, vec(ids)),
+        length(ids),
+        0,
+        zeros(Float64, length(ids)),
+        zeros(Float64, length(ids)),
+        zeros(Float32, length(ids))
+    )
+end
+
+function _write_stream_ebv_meta!(output::StreamEBVSampleOutput)
+    entries = [
+        "trait" => output.trait,
+        "nSamples" => string(output.nSamples),
+        "nObs" => string(output.nObs),
+        "dtype" => "Float32"
+    ]
+    _write_streaming_manifest(output.meta_path, entries)
+    return nothing
+end
+
+function _write_stream_ebv_sample!(output::StreamEBVSampleOutput, values::AbstractVector)
+    length(values) == output.nObs || error("Stream EBV sample length must match nObs.")
+
+    output.nSamples += 1
+    nsamples = output.nSamples
+    @inbounds for i in 1:output.nObs
+        sample_i = Float64(values[i])
+        output.mean[i] += (sample_i - output.mean[i]) / nsamples
+        output.mean2[i] += (sample_i * sample_i - output.mean2[i]) / nsamples
+        output.buffer32[i] = Float32(sample_i)
+    end
+    write(output.bin_io, output.buffer32)
+    return nothing
+end
+
+function _stream_ebv_summary(output::StreamEBVSampleOutput)
+    if output.nSamples <= 1
+        pev = fill(NaN, output.nObs)
+    else
+        scale = output.nSamples / (output.nSamples - 1)
+        pev = max.(0.0, scale .* (output.mean2 .- output.mean .^ 2))
+    end
+    return (IDs=copy(output.ids), EBV=copy(output.mean), PEV=pev, nSamples=output.nSamples)
+end
+
+function _finalize_mcmc_sample_outputs!(outfile)
+    stream_summaries = Dict{String,NamedTuple}()
+
+    for (key, value) in outfile
+        if key == "__stream_ebv__"
+            for (trait_key, stream_output) in value
+                close(stream_output.bin_io)
+                _write_stream_ebv_meta!(stream_output)
+                stream_summaries[trait_key] = _stream_ebv_summary(stream_output)
+            end
+        elseif value isa IOStream
+            close(value)
+        end
+    end
+
+    return isempty(stream_summaries) ? false : stream_summaries
+end
+
+"""
+    readEBVsamples(output_folder, trait; mmap=true)
+
+Read posterior EBV samples from either dense text files or stream binary files.
+Returns `(IDs, samples)` where `samples` is `nSamples x nObs`.
+"""
+function readEBVsamples(output_folder, trait; mmap::Bool=true)
+    trait_name = string(trait)
+    prefix = _stream_ebv_prefix(output_folder, trait_name)
+    bin_path = prefix * ".bin"
+    ids_path = prefix * ".ids.txt"
+    meta_path = prefix * ".meta"
+
+    if isfile(bin_path)
+        meta = _read_streaming_manifest(meta_path)
+        nSamples = parse(Int, meta["nSamples"])
+        nObs = parse(Int, meta["nObs"])
+        dtype = meta["dtype"]
+        dtype == "Float32" || error("Unsupported EBV sample dtype '$dtype'.")
+
+        ids = _read_string_lines(ids_path)
+        length(ids) == nObs || error("EBV sample metadata/ID count mismatch for $ids_path.")
+
+        sample_count = nSamples * nObs
+        if mmap
+            io = open(bin_path, "r")
+            raw = Mmap.mmap(io, Vector{Float32}, sample_count)
+            close(io)
+            return ids, transpose(reshape(raw, nObs, nSamples))
+        end
+
+        raw = Vector{Float32}(undef, sample_count)
+        open(bin_path, "r") do io
+            read!(io, raw)
+        end
+        return ids, Matrix(transpose(reshape(raw, nObs, nSamples)))
+    end
+
+    txt_path = prefix * ".txt"
+    if isfile(txt_path)
+        samples, ids = readdlm(txt_path, ',', header=true)
+        return map(string, vec(ids)), map(Float64, samples)
+    end
+
+    error("EBV sample files are not found for trait $(trait_name) in $(output_folder).")
+end
+
 
 # ===============================================================================================================
 #                                PRIVATE FUNCTIONS
@@ -107,7 +261,8 @@ end
 ################################################################################
 function output_result(mme,output_folder,
                        solMean,meanVare,G0Mean,
-                       solMean2 = missing,meanVare2 = missing,G0Mean2 = missing)
+                       solMean2 = missing,meanVare2 = missing,G0Mean2 = missing;
+                       stream_ebv_summaries = false)
   output = Dict()
   location_parameters = reformat2dataframe([getNames(mme) solMean sqrt.(abs.(solMean2 .- solMean .^2))])
   output["location parameters"] = location_parameters
@@ -166,10 +321,16 @@ function output_result(mme,output_folder,
       output_file = output_folder*"/MCMC_samples"
       EBVkeys = ["EBV"*"_"*string(mme.lhsVec[traiti]) for traiti in 1:ntraits]
       for EBVkey in EBVkeys
-          EBVsamplesfile = output_file*"_"*EBVkey*".txt"
-          EBVsamples,IDs = readdlm(EBVsamplesfile,',',header=true)
-          EBV            = vec(mean(EBVsamples,dims=1))
-          PEV            = vec(var(EBVsamples,dims=1))
+          if stream_ebv_summaries !== false && haskey(stream_ebv_summaries, EBVkey)
+              summary = stream_ebv_summaries[EBVkey]
+              IDs = summary.IDs
+              EBV = summary.EBV
+              PEV = summary.PEV
+          else
+              IDs, EBVsamples = readEBVsamples(output_folder, replace(EBVkey, "EBV_" => ""); mmap=false)
+              EBV = vec(mean(EBVsamples,dims=1))
+              PEV = vec(var(EBVsamples,dims=1))
+          end
           if vec(IDs) == mme.output_ID
               output[EBVkey] = DataFrame([mme.output_ID EBV PEV],[:ID,:EBV,:PEV])
           else
@@ -282,7 +443,14 @@ function getEBV(mme,traiti)
     end
     if mme.M != 0
         for Mi in mme.M
-            EBV += Mi.output_genotypes*Mi.α[traiti]
+            if Mi.storage_mode == :stream
+                Mi.output_stream_backend == false && error("Stream output backend is not initialized.")
+                tmp = Vector{Float64}(undef, Mi.output_stream_backend.nObs)
+                streaming_mul_alpha!(tmp, Mi.output_stream_backend, Mi.α[traiti])
+                EBV += tmp
+            else
+                EBV += Mi.output_genotypes*Mi.α[traiti]
+            end
         end
     end
     return EBV
@@ -301,42 +469,47 @@ end
 (internal function) Set up text files to save MCMC samples.
 """
 function output_MCMC_samples_setup(mme,nIter,output_samples_frequency,file_name="MCMC_samples")
-  ntraits     = size(mme.lhsVec,1)
+  ntraits = size(mme.lhsVec,1)
+  stream_ebv_mode = _is_stream_output_mode(mme)
 
-  outfile = Dict{String,IOStream}()
+  outfile = Dict{String,Any}()
+  outfile["__stream_ebv__"] = Dict{String,StreamEBVSampleOutput}()
 
   outvar = ["residual_variance"]
   if mme.pedTrmVec != 0
       push!(outvar,"polygenic_effects_variance")
   end
-  
-  if mme.M !=0 #write samples for marker effects to a text file
-    for Mi in mme.M
-        geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
-        for traiti in geno_names
-            push!(outvar,"marker_effects_"*Mi.name*"_"*traiti)
-        end
-        push!(outvar,"marker_effects_variances"*"_"*Mi.name)
-        push!(outvar,"pi"*"_"*Mi.name)
-    end
- end
 
-  #non-marker location parameters
-  for trmi in  mme.outputSamplesVec
-      trmStr = trmi.trmStr
-      push!(outvar,trmStr)
+  if mme.M != 0 && mme.MCMCinfo.output_marker_parameter_samples
+      for Mi in mme.M
+          geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
+          for traiti in geno_names
+              push!(outvar,"marker_effects_"*Mi.name*"_"*traiti)
+          end
+          push!(outvar,"marker_effects_variances"*"_"*Mi.name)
+          push!(outvar,"pi"*"_"*Mi.name)
+      end
   end
 
-  #non-marker random effects variances
-  for i in  mme.rndTrmVec
-      trmStri   = join(i.term_array, "_")                  #x2
-      push!(outvar,trmStri*"_variances")
+  for trmi in mme.outputSamplesVec
+      push!(outvar, trmi.trmStr)
   end
 
-  #EBV
+  for effect in mme.rndTrmVec
+      trmStri = join(effect.term_array, "_")
+      push!(outvar, trmStri*"_variances")
+  end
+
   if mme.MCMCinfo.outputEBV == true
       for traiti in 1:ntraits
-          push!(outvar,"EBV_"*string(mme.lhsVec[traiti]))
+          key = "EBV_"*string(mme.lhsVec[traiti])
+          if stream_ebv_mode
+              outfile["__stream_ebv__"][key] = _create_stream_ebv_sample_output(dirname(file_name),
+                                                                                 string(mme.lhsVec[traiti]),
+                                                                                 mme.output_ID)
+          else
+              push!(outvar, key)
+          end
       end
       if mme.MCMCinfo.output_heritability == true && mme.MCMCinfo.single_step_analysis == false
           push!(outvar,"genetic_variance")
@@ -347,28 +520,27 @@ function output_MCMC_samples_setup(mme,nIter,output_samples_frequency,file_name=
           end
       end
   end
-  #categorical/censored traits
+
   for t in 1:mme.nModels
-      if mme.traits_type[t] ∈ ["categorical","categorical(binary)","censored"] #liability are sampled
+      if mme.traits_type[t] ∈ ["categorical","categorical(binary)","censored"]
           push!(outvar,"liabilities_"*string(mme.lhsVec[t]))
-          if mme.traits_type[t] ∈ ["categorical","categorical(binary)"] #thresholds will be saved
+          if mme.traits_type[t] ∈ ["categorical","categorical(binary)"]
               push!(outvar,"threshold_"*string(mme.lhsVec[t]))
           end
       end
   end
 
   for i in outvar
-      file_i    = file_name*"_"*replace(i,":"=>".")*".txt" #replace ":" by "." to avoid reserved characters in Windows
+      file_i = file_name*"_"*replace(i,":"=>".")*".txt"
       if isfile(file_i)
         printstyled("The file "*file_i*" already exists!!! It is overwritten by the new output.\n",bold=false,color=:red)
       else
         printstyled("The file "*file_i*" is created to save MCMC samples for "*i*".\n",bold=false,color=:green)
       end
-      outfile[i]=open(file_i,"w")
+      outfile[i] = open(file_i,"w")
   end
 
-  #add headers
-  mytraits=map(string,mme.lhsVec)
+  mytraits = map(string,mme.lhsVec)
   if mme.R.constraint == false
       varheader = repeat(mytraits,inner=length(mytraits)).*"_".*repeat(mytraits,outer=length(mytraits))
   else
@@ -376,39 +548,39 @@ function output_MCMC_samples_setup(mme,nIter,output_samples_frequency,file_name=
   end
   writedlm(outfile["residual_variance"],transubstrarr(varheader),',')
 
-  for trmi in  mme.outputSamplesVec
-      trmStr = trmi.trmStr
-      writedlm(outfile[trmStr],transubstrarr(getNames(trmi)),',')
+  for trmi in mme.outputSamplesVec
+      writedlm(outfile[trmi.trmStr],transubstrarr(getNames(trmi)),',')
   end
 
-  for effect in  mme.rndTrmVec
-    trmStri   = join(effect.term_array, "_")                  #x2
-    thisheader= repeat(effect.term_array,inner=length(effect.term_array)).*"_".*repeat(effect.term_array,outer=length(effect.term_array))
-    writedlm(outfile[trmStri*"_variances"],transubstrarr(thisheader),',') #1:x2_1:x2,1:x2_2:x2,2:x2_1:x2,2:x2_2:x2
+  for effect in mme.rndTrmVec
+    trmStri = join(effect.term_array, "_")
+    thisheader = repeat(effect.term_array,inner=length(effect.term_array)).*"_".*repeat(effect.term_array,outer=length(effect.term_array))
+    writedlm(outfile[trmStri*"_variances"],transubstrarr(thisheader),',')
   end
-  
-  if mme.M !=0
-    for Mi in mme.M
-        geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
-        for traiti in geno_names
-            writedlm(outfile["marker_effects_"*Mi.name*"_"*traiti],transubstrarr(Mi.markerID),',')
-        end
-    end
+
+  if mme.M != 0 && mme.MCMCinfo.output_marker_parameter_samples
+      for Mi in mme.M
+          geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
+          for traiti in geno_names
+              writedlm(outfile["marker_effects_"*Mi.name*"_"*traiti],transubstrarr(Mi.markerID),',')
+          end
+      end
   end
 
   if mme.pedTrmVec != 0
-      pedtrmvec  = mme.pedTrmVec
+      pedtrmvec = mme.pedTrmVec
       thisheader = repeat(pedtrmvec,inner=length(pedtrmvec)).*"_".*repeat(pedtrmvec,outer=length(pedtrmvec))
       writedlm(outfile["polygenic_effects_variance"],transubstrarr(thisheader),',')
   end
 
   if mme.MCMCinfo.outputEBV == true
-      for traiti in 1:ntraits
-          writedlm(outfile["EBV_"*string(mme.lhsVec[traiti])],transubstrarr(mme.output_ID),',')
+      if !stream_ebv_mode
+          for traiti in 1:ntraits
+              writedlm(outfile["EBV_"*string(mme.lhsVec[traiti])],transubstrarr(mme.output_ID),',')
+          end
       end
       if mme.MCMCinfo.output_heritability == true && mme.MCMCinfo.single_step_analysis == false
           varheader = repeat(mytraits,inner=length(mytraits)).*"_".*repeat(mytraits,outer=length(mytraits))
-
           writedlm(outfile["genetic_variance"],transubstrarr(varheader),',')
           if mme.MCMCinfo.RRM == false
               writedlm(outfile["heritability"],transubstrarr(map(string,mme.lhsVec)),',')
@@ -426,6 +598,7 @@ end
 function output_MCMC_samples(mme,vRes,G0,
                              outfile=false)
     ntraits     = size(mme.lhsVec,1)
+    stream_ebv_outputs = outfile == false ? Dict{String,StreamEBVSampleOutput}() : _stream_ebv_store(outfile)
     #location parameters
     output_location_parameters_samples(mme,mme.sol,outfile)
     #random effects variances
@@ -442,7 +615,7 @@ function output_MCMC_samples(mme,vRes,G0,
     if mme.pedTrmVec != 0
         writedlm(outfile["polygenic_effects_variance"],vec(G0)',',')
     end
-    if mme.M != 0 && outfile != false
+    if mme.M != 0 && outfile != false && mme.MCMCinfo.output_marker_parameter_samples
       for Mi in mme.M
          ntraits_geno = mme.MCMCinfo.RRM == false ? Mi.ntraits : length(mme.lhsVec)
          geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
@@ -471,10 +644,20 @@ function output_MCMC_samples(mme,vRes,G0,
 
     if mme.MCMCinfo.outputEBV == true
          EBVmat = myEBV = getEBV(mme,1)
-         writedlm(outfile["EBV_"*string(mme.lhsVec[1])],myEBV',',')
+         trait_key = "EBV_"*string(mme.lhsVec[1])
+         if haskey(stream_ebv_outputs, trait_key)
+             _write_stream_ebv_sample!(stream_ebv_outputs[trait_key], myEBV)
+         else
+             writedlm(outfile[trait_key],myEBV',',')
+         end
          for traiti in 2:ntraits
              myEBV = getEBV(mme,traiti) #actually BV
-             writedlm(outfile["EBV_"*string(mme.lhsVec[traiti])],myEBV',',')
+             trait_key = "EBV_"*string(mme.lhsVec[traiti])
+             if haskey(stream_ebv_outputs, trait_key)
+                 _write_stream_ebv_sample!(stream_ebv_outputs[trait_key], myEBV)
+             else
+                 writedlm(outfile[trait_key],myEBV',',')
+             end
              EBVmat = [EBVmat myEBV]
          end
 

@@ -89,6 +89,37 @@ end
                                                     double_precision=true,
                                                     memory_guard=:off)
             end
+
+            @testset "repeated phenotype IDs are rejected" begin
+                phenotypes_repeated = DataFrame(ID=["a1", "a1", "a2", "a3"],
+                                                y1=Float32[1.0, -0.2, 0.5, -0.8])
+                global geno = get_genotypes(prefix, 1.0; method="BayesC", storage=:stream)
+                model = build_model("y1 = intercept + geno", 1.0)
+                @test_throws ErrorException runMCMC(model, phenotypes_repeated;
+                                                    chain_length=20,
+                                                    burnin=5,
+                                                    output_samples_frequency=5,
+                                                    output_folder="stream_repeated_pheno",
+                                                    outputEBV=false,
+                                                    output_heritability=false,
+                                                    seed=15,
+                                                    memory_guard=:off)
+            end
+
+            @testset "repeated output IDs are rejected" begin
+                global geno = get_genotypes(prefix, 1.0; method="BayesC", storage=:stream)
+                model = build_model("y1 = intercept + geno", 1.0)
+                outputEBV(model, ["a4", "a4", "a2"])
+                @test_throws ErrorException runMCMC(model, phenotypes;
+                                                    chain_length=20,
+                                                    burnin=5,
+                                                    output_samples_frequency=5,
+                                                    output_folder="stream_repeated_output",
+                                                    outputEBV=true,
+                                                    output_heritability=false,
+                                                    seed=16,
+                                                    memory_guard=:off)
+            end
         end
     end
 end

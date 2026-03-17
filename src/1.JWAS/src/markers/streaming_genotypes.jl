@@ -24,10 +24,116 @@ mutable struct Packed2BitBackend
     packed_buffer::Vector{UInt8}
 end
 
+mutable struct Packed2BitSelectionView
+    backend::Packed2BitBackend
+    nObs::Int
+    nMarkers::Int
+    centered::Bool
+    marker_means::Vector{Float32}
+    xpRinvx::Union{Vector{Float32},Nothing}
+    allele_freq::Vector{Float32}
+    sum2pq::Float64
+    obsID::Vector{String}
+    markerID::Vector{String}
+    row_indices::Vector{Int}
+    packed_byte_indices::Vector{Int}
+    bit_shifts::Vector{Int}
+end
+
 function close_streaming_backend!(backend::Packed2BitBackend)
     if isopen(backend.io)
         close(backend.io)
     end
+    return nothing
+end
+
+function _require_unique_stream_ids(ids::Vector{String}, label::AbstractString)
+    if length(unique(ids)) != length(ids)
+        error("storage=:stream MVP does not support repeated $label IDs.")
+    end
+    return nothing
+end
+
+function _selection_row_indices(base_ids::Vector{String},
+                                selected_ids::Vector{String},
+                                label::AbstractString)
+    _require_unique_stream_ids(selected_ids, label)
+    id_to_index = Dict{String,Int}(id => i for (i, id) in enumerate(base_ids))
+    row_indices = Vector{Int}(undef, length(selected_ids))
+    for (i, id) in enumerate(selected_ids)
+        row_index = get(id_to_index, id, 0)
+        row_index == 0 && error("storage=:stream MVP requires $label IDs to be a subset of the streaming backend IDs. Missing ID: $id")
+        row_indices[i] = row_index
+    end
+    return row_indices
+end
+
+function build_stream_selection_view(backend::Packed2BitBackend,
+                                     selected_ids::AbstractVector{<:AbstractString};
+                                     label::AbstractString,
+                                     compute_xpRinvx::Bool=false)
+    ids = map(String, vec(selected_ids))
+    row_indices = _selection_row_indices(backend.obsID, ids, label)
+    packed_byte_indices = Vector{Int}(undef, length(row_indices))
+    bit_shifts = Vector{Int}(undef, length(row_indices))
+
+    @inbounds for i in eachindex(row_indices)
+        row = row_indices[i]
+        packed_byte_indices[i] = ((row - 1) >>> 2) + 1
+        bit_shifts[i] = ((row - 1) & 0x03) << 1
+    end
+
+    view = Packed2BitSelectionView(
+        backend,
+        length(ids),
+        backend.nMarkers,
+        backend.centered,
+        backend.marker_means,
+        nothing,
+        backend.allele_freq,
+        backend.sum2pq,
+        ids,
+        backend.markerID,
+        row_indices,
+        packed_byte_indices,
+        bit_shifts
+    )
+
+    if compute_xpRinvx
+        view.xpRinvx = _compute_selection_xpRinvx(view)
+    end
+
+    return view
+end
+
+function setup_stream_views!(mme::MME)
+    Mi = mme.M[1]
+    backend = Mi.stream_backend isa Packed2BitSelectionView ? Mi.stream_backend.backend : Mi.stream_backend
+    backend isa Packed2BitBackend || error("storage=:stream expected a full packed backend before view construction.")
+
+    train_ids = map(String, vec(mme.obsID))
+    _require_unique_stream_ids(train_ids, "phenotype")
+    train_view = build_stream_selection_view(backend, train_ids;
+                                             label="phenotype",
+                                             compute_xpRinvx=true)
+
+    Mi.stream_backend = train_view
+    Mi.output_stream_backend = false
+    Mi.output_genotypes = false
+    Mi.obsID = map(x -> (x::AbstractString), train_view.obsID)
+    Mi.nObs = train_view.nObs
+
+    if mme.MCMCinfo.outputEBV == true
+        output_ids = mme.output_ID isa AbstractVector ? map(String, vec(mme.output_ID)) : copy(backend.obsID)
+        output_view = build_stream_selection_view(backend, output_ids;
+                                                  label="output",
+                                                  compute_xpRinvx=false)
+        Mi.output_stream_backend = output_view
+        mme.output_ID = map(x -> (x::AbstractString), output_view.obsID)
+    end
+
+    printstyled("storage=:stream is enabled; training/output genotype views are built from the packed backend.\n",
+                bold=false,color=:green)
     return nothing
 end
 
@@ -970,22 +1076,28 @@ function load_streaming_backend(path::AbstractString)
     return backend
 end
 
+function _read_marker_bytes!(backend::Packed2BitBackend, marker_index::Integer)
+    if marker_index < 1 || marker_index > backend.nMarkers
+        error("marker_index out of bounds.")
+    end
+
+    offset = (marker_index - 1) * backend.stride_bytes
+    seek(backend.io, offset)
+    read!(backend.io, backend.packed_buffer)
+    return backend.packed_buffer
+end
+
 """
     decode_marker!(dest, backend, marker_index)
 
 Decode one marker into `dest` with centering and missing-value mean-imputation.
 """
 function decode_marker!(dest::AbstractVector, backend::Packed2BitBackend, marker_index::Integer)
-    if marker_index < 1 || marker_index > backend.nMarkers
-        error("marker_index out of bounds.")
-    end
     if length(dest) != backend.nObs
         error("Destination vector length must equal nObs.")
     end
 
-    offset = (marker_index - 1) * backend.stride_bytes
-    seek(backend.io, offset)
-    read!(backend.io, backend.packed_buffer)
+    packed = _read_marker_bytes!(backend, marker_index)
 
     μ = backend.marker_means[marker_index]
     centered = backend.centered
@@ -993,7 +1105,7 @@ function decode_marker!(dest::AbstractVector, backend::Packed2BitBackend, marker
     @inbounds for i in 1:backend.nObs
         byte_idx = ((i - 1) >>> 2) + 1
         shift = ((i - 1) & 0x03) << 1
-        code = (backend.packed_buffer[byte_idx] >> shift) & 0x03
+        code = (packed[byte_idx] >> shift) & 0x03
         v = code == 0x03 ? μ : Float32(code)
         dest[i] = centered ? (v - μ) : v
     end
@@ -1001,12 +1113,42 @@ function decode_marker!(dest::AbstractVector, backend::Packed2BitBackend, marker
     return dest
 end
 
+function decode_marker!(dest::AbstractVector, backend::Packed2BitSelectionView, marker_index::Integer)
+    if length(dest) != backend.nObs
+        error("Destination vector length must equal nObs.")
+    end
+
+    packed = _read_marker_bytes!(backend.backend, marker_index)
+    μ = backend.marker_means[marker_index]
+    centered = backend.centered
+
+    @inbounds for i in 1:backend.nObs
+        code = (packed[backend.packed_byte_indices[i]] >> backend.bit_shifts[i]) & 0x03
+        v = code == 0x03 ? μ : Float32(code)
+        dest[i] = centered ? (v - μ) : v
+    end
+
+    return dest
+end
+
+function _compute_selection_xpRinvx(view::Packed2BitSelectionView)
+    xpRinvx = Vector{Float32}(undef, view.nMarkers)
+    marker_buffer = Vector{Float32}(undef, view.nObs)
+
+    @showprogress "precomputing streaming training xpRinvx ..." for marker_index in 1:view.nMarkers
+        decode_marker!(marker_buffer, view, marker_index)
+        xpRinvx[marker_index] = sum(abs2, marker_buffer)
+    end
+
+    return xpRinvx
+end
+
 """
     streaming_mul_alpha!(out, backend, α)
 
 Compute `out = X*α` from a streaming backend without materializing dense `X`.
 """
-function streaming_mul_alpha!(out::AbstractVector, backend::Packed2BitBackend, α::AbstractVector)
+function _streaming_mul_alpha!(out::AbstractVector, backend, α::AbstractVector)
     if length(out) != backend.nObs
         error("Output vector length must equal nObs.")
     end
@@ -1024,4 +1166,12 @@ function streaming_mul_alpha!(out::AbstractVector, backend::Packed2BitBackend, �
         end
     end
     return out
+end
+
+function streaming_mul_alpha!(out::AbstractVector, backend::Packed2BitBackend, α::AbstractVector)
+    return _streaming_mul_alpha!(out, backend, α)
+end
+
+function streaming_mul_alpha!(out::AbstractVector, backend::Packed2BitSelectionView, α::AbstractVector)
+    return _streaming_mul_alpha!(out, backend, α)
 end

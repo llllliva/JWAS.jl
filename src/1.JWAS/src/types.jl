@@ -148,6 +148,7 @@ mutable struct Genotypes
   output_genotypes #output genotypes
   storage_mode::Symbol # :dense (default) or :stream
   stream_backend  # backend object for storage_mode=:stream
+  output_stream_backend # output backend view for storage_mode=:stream
 
   isGRM  #whether genotypes or relationship matirx is provided
   annotations
@@ -159,7 +160,7 @@ mutable struct Genotypes
                                          false,false,false,false,false,false,false,false,false,
                                          false,false,false,false,
                                          false,false,false,false,false,false,false,false,false,
-                                         false,:dense,false,a9,false)
+                                         false,:dense,false,false,a9,false)
 end
 
 mutable struct MarkerAnnotations
@@ -206,6 +207,7 @@ mutable struct MCMCinfo
     chain_length
     burnin
     output_samples_frequency
+    output_marker_parameter_samples
     printout_model_info
     printout_frequency
     single_step_analysis

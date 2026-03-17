@@ -1,6 +1,7 @@
 using Distributions,Printf,Random
 using DelimitedFiles
 using InteractiveUtils #for versioninfo
+using Mmap
 using DataFrames,CSV
 using SparseArrays
 using LinearAlgebra
@@ -54,7 +55,7 @@ include("input_data_validation.jl")
 include("output.jl")
 
 export build_model,set_covariate,set_random,add_genotypes,get_genotypes,prepare_streaming_genotypes
-export outputMCMCsamples,outputEBV,getEBV
+export outputMCMCsamples,outputEBV,getEBV,readEBVsamples
 export solve,runMCMC
 export describe
 #Pedmodule
@@ -100,6 +101,7 @@ export dataset
             memory_guard_ratio              = 0.80,
             ##MCMC samples (defaut to marker effects and hyperparametes (variance components))
             output_folder                     = "results",
+            output_marker_parameter_samples   = true,
             output_samples_for_all_parameters = false,
             ##for deprecated JWAS
             methods                         = "conventional (no markers)",
@@ -141,6 +143,7 @@ export dataset
   * If `big_memory`=true, defaulting to `false`, a machine with  lots of memory is assumed which may speed up the analysis.
   * `memory_guard` controls the marker-memory precheck before MCMC (`:error`, `:warn`, `:off`; default `:error`).
   * `memory_guard_ratio` sets the allowed fraction of `Sys.total_memory()` for the precheck (default `0.80`).
+  * `output_marker_parameter_samples=false` skips marker-effect, marker-variance, and `pi` MCMC sample files.
 """
 function runMCMC(mme::MME,df;
                 #Data
@@ -174,6 +177,7 @@ function runMCMC(mme::MME,df;
                 memory_guard_ratio::Float64     = 0.80,
                 #MCMC samples (defaut to marker effects and hyperparametes (variance componets))
                 output_folder                     = "results",
+                output_marker_parameter_samples::Bool = true,
                 output_samples_for_all_parameters = false,
                 #for deprecated JWAS
                 methods                         = "conventional (no markers)",
@@ -244,7 +248,7 @@ function runMCMC(mme::MME,df;
     # Save MCMC argumenets in MCMCinfo
     ############################################################################
     mme.MCMCinfo = MCMCinfo(heterogeneous_residuals,
-                   chain_length,burnin,output_samples_frequency,
+                   chain_length,burnin,output_samples_frequency,output_marker_parameter_samples,
                    printout_model_info,printout_frequency, single_step_analysis,
                    fitting_J_vector,missing_phenotypes,
                    update_priors_frequency,outputEBV,output_heritability,prediction_equation,
@@ -354,20 +358,18 @@ function runMCMC(mme::MME,df;
     #align genotypes with 1) phenotypes IDs; 2) output IDs.
     if mme.M != false
         genotypes_id_file = joinpath(output_folder,"IDs_for_individuals_with_genotypes.txt")
-        writedlm(genotypes_id_file,mme.M[1].obsID)
         has_streaming_genotypes = any(Mi.storage_mode == :stream for Mi in mme.M)
+        if has_streaming_genotypes
+            backend_ids = mme.M[1].stream_backend isa Packed2BitSelectionView ? mme.M[1].stream_backend.backend.obsID : mme.M[1].stream_backend.obsID
+            writedlm(genotypes_id_file,backend_ids)
+        else
+            writedlm(genotypes_id_file,mme.M[1].obsID)
+        end
         if has_streaming_genotypes
             if length(mme.M) != 1
                 error("storage=:stream MVP supports one genotype category only.")
             end
-            Mi = mme.M[1]
-            if length(unique(mme.obsID)) != length(mme.obsID)
-                error("storage=:stream MVP requires one phenotype record per individual (no repeated IDs).")
-            end
-            if mme.obsID != Mi.obsID
-                error("storage=:stream MVP requires exact genotype/phenotype ID match and order. Please reorder phenotypes to match genotype IDs.")
-            end
-            printstyled("storage=:stream is enabled; genotype alignment is skipped and original ID order is used.\n",bold=false,color=:green)
+            setup_stream_views!(mme)
         else
             align_genotypes(mme,output_heritability,single_step_analysis)
         end
@@ -463,7 +465,7 @@ function runMCMC(mme::MME,df;
     printstyled("\n\nThe version of Julia and Platform in use:\n\n",bold=true)
     versioninfo()
     printstyled("\n\nThe analysis has finished. Results are saved in the returned ",bold=true)
-    printstyled("variable and text files. MCMC samples are saved in text files.\n\n\n",bold=true)
+    printstyled("variable and text files. MCMC samples are saved in text files (stream EBV samples use binary files).\n\n\n",bold=true)
 
     # make MCMC samples for indirect marker effect
     if causal_structure != false
@@ -557,6 +559,7 @@ function getMCMCinfo(mme)
     @printf("%-30s %20s\n","starting_value",mme.sol != false ? "true" : "false")
     @printf("%-30s %20d\n","printout_frequency",MCMCinfo.printout_frequency)
     @printf("%-30s %20d\n","output_samples_frequency",MCMCinfo.output_samples_frequency)
+    @printf("%-30s %20s\n","output_marker_parameter_samples",MCMCinfo.output_marker_parameter_samples ? "true" : "false")
     # @printf("%-30s %20s\n","constraint",MCMCinfo.constraint ? "true" : "false")
     @printf("%-30s %19s\n","constraint on residual variance",mme.R.constraint ? "true" : "false")
     if mme.M != 0
