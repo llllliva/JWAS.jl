@@ -132,15 +132,28 @@ function output_result(mme,output_folder,
          whicheffect = Mi.meanAlpha[traiti]
          whicheffectsd = sqrt.(abs.(Mi.meanAlpha2[traiti] .- Mi.meanAlpha[traiti] .^2))
          whichdelta    = Mi.meanDelta[traiti]
+         whichrawdelta = Mi.method == "BayesR" ? Mi.meanDeltaRaw[traiti] : false
+         whichclasspip = Mi.method == "BayesR" ? Mi.meanClassPIP[traiti] : false
           for traiti in 2:ntraits_geno
                 whichtrait     = vcat(whichtrait,fill(string(mme.lhsVec[traiti]),length(Mi.markerID)))
                 whichmarker    = vcat(whichmarker,Mi.markerID)
                 whicheffect    = vcat(whicheffect,Mi.meanAlpha[traiti])
                 whicheffectsd  = vcat(whicheffectsd,sqrt.(abs.(Mi.meanAlpha2[traiti] .- Mi.meanAlpha[traiti] .^2)))
                 whichdelta     = vcat(whichdelta,Mi.meanDelta[traiti])
+                if Mi.method == "BayesR"
+                    whichrawdelta = vcat(whichrawdelta,Mi.meanDeltaRaw[traiti])
+                    whichclasspip = vcat(whichclasspip,Mi.meanClassPIP[traiti])
+                end
             end
 
-          output["marker effects "*Mi.name]=DataFrame([whichtrait whichmarker whicheffect whicheffectsd whichdelta],[:Trait,:Marker_ID,:Estimate,:SD,:Model_Frequency])
+          marker_effects_output = DataFrame([whichtrait whichmarker whicheffect whicheffectsd whichdelta],[:Trait,:Marker_ID,:Estimate,:SD,:Model_Frequency])
+          if Mi.method == "BayesR"
+              marker_effects_output[!,:Mean_Delta] = whichrawdelta
+              for classi in axes(whichclasspip,2)
+                  marker_effects_output[!,Symbol("Class", classi, "_PIP")] = whichclasspip[:,classi]
+              end
+          end
+          output["marker effects "*Mi.name]=marker_effects_output
           #output["marker effects variance "*Mi.name] = matrix2dataframe(string.(mme.lhsVec),Mi.meanVara,Mi.meanVara2)
           if Mi.estimatePi == true
               output["pi_"*Mi.name] = pi2dataframe(Mi, Mi.mean_pi, Mi.mean_pi2)
@@ -342,6 +355,7 @@ function output_MCMC_samples_setup(mme,nIter,output_samples_frequency,file_name=
         geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
         for traiti in geno_names
             push!(outvar,"marker_effects_"*Mi.name*"_"*traiti)
+            push!(outvar,"delta_"*Mi.name*"_"*traiti)
         end
         push!(outvar,"marker_effects_variances"*"_"*Mi.name)
         push!(outvar,"pi"*"_"*Mi.name)
@@ -419,6 +433,7 @@ function output_MCMC_samples_setup(mme,nIter,output_samples_frequency,file_name=
         geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
         for traiti in geno_names
             writedlm(outfile["marker_effects_"*Mi.name*"_"*traiti],transubstrarr(Mi.markerID),',')
+            writedlm(outfile["delta_"*Mi.name*"_"*traiti],transubstrarr(Mi.markerID),',')
         end
     end
   end
@@ -475,6 +490,7 @@ function output_MCMC_samples(mme,vRes,G0,
          geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
          for traiti in 1:ntraits_geno
             writedlm(outfile["marker_effects_"*Mi.name*"_"*geno_names[traiti]],Mi.α[traiti]',',')
+            writedlm(outfile["delta_"*Mi.name*"_"*geno_names[traiti]],Mi.δ[traiti]',',')
          end
           
          if Mi.G.val != false
@@ -580,7 +596,15 @@ function output_posterior_mean_variance(mme,nsamples)
                 Mi.meanAlpha[trait] += (Mi.α[trait] - Mi.meanAlpha[trait])/nsamples
                 Mi.meanAlpha2[trait]+= (Mi.α[trait].^2 - Mi.meanAlpha2[trait])/nsamples
                 if Mi.method == "BayesR"
-                    Mi.meanDelta[trait] += (Float64.(Mi.δ[trait] .> 1) - Mi.meanDelta[trait]) / nsamples
+                    for marker in eachindex(Mi.δ[trait])
+                        sampled_class = Mi.δ[trait][marker]
+                        Mi.meanDelta[trait][marker] += ((sampled_class > 1 ? 1.0 : 0.0) - Mi.meanDelta[trait][marker]) / nsamples
+                        Mi.meanDeltaRaw[trait][marker] += (Float64(sampled_class) - Mi.meanDeltaRaw[trait][marker]) / nsamples
+                        for classi in axes(Mi.meanClassPIP[trait], 2)
+                            class_indicator = sampled_class == classi ? 1.0 : 0.0
+                            Mi.meanClassPIP[trait][marker,classi] += (class_indicator - Mi.meanClassPIP[trait][marker,classi]) / nsamples
+                        end
+                    end
                 else
                     Mi.meanDelta[trait] += (Mi.δ[trait] - Mi.meanDelta[trait])/nsamples
                 end

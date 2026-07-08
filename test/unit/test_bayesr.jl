@@ -313,6 +313,12 @@ end
     @test occursin("starting pi", lowercase(printed))
     @test occursin("expected class counts", lowercase(printed))
     @test haskey(output, "marker effects geno")
+    marker_effects = output["marker effects geno"]
+    @test all(["Mean_Delta"; "Class1_PIP"; "Class2_PIP"; "Class3_PIP"; "Class4_PIP"] .∈ Ref(names(marker_effects)))
+    class_pips = Matrix(marker_effects[:, [:Class1_PIP, :Class2_PIP, :Class3_PIP, :Class4_PIP]])
+    @test all(isapprox.(sum(class_pips, dims=2), 1.0; atol=1e-8))
+    @test all(isapprox.(marker_effects[!, :Model_Frequency], vec(sum(class_pips[:, 2:4], dims=2)); atol=1e-8))
+    @test all(isapprox.(marker_effects[!, :Mean_Delta], class_pips * collect(1:4); atol=1e-8))
     @test haskey(output, "location parameters")
     isdir(outdir) && rm(outdir, recursive=true)
 end
@@ -340,6 +346,7 @@ end
     @test nrow(output["pi_geno"]) == 4
     @test isapprox(sum(output["pi_geno"][!, :Estimate]), 1.0; atol=1e-6)
     @test all(0.0 .<= output["marker effects geno"][!, :Model_Frequency] .<= 1.0)
+    @test all(0.0 .<= output["marker effects geno"][!, :Class1_PIP] .<= 1.0)
     isdir(outdir) && rm(outdir, recursive=true)
 end
 
