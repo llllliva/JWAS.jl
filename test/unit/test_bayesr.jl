@@ -249,6 +249,26 @@ end
     @test JWAS.bayesr_block_nreps(3, 8, 1) == 1
 end
 
+@testset "BayesR inner/outer accumulator" begin
+    stats = JWAS.BayesRInnerOuterStats(3, 4)
+    α = Float64[0.2, 0.0, -0.4]
+    δ = Int[2, 1, 4]
+    JWAS.record_bayesr_inner_sweep!(stats, α, δ, 1:3)
+
+    α .= [0.4, 0.1, -0.2]
+    δ .= [3, 2, 4]
+    JWAS.record_bayesr_inner_sweep!(stats, α, δ, 1:3)
+    summary = JWAS.summarize_bayesr_inner_outer(stats)
+
+    @test summary.draws == UInt64[2, 2, 2]
+    @test summary.effect_mean ≈ [0.3, 0.05, -0.3]
+    @test summary.inclusion_pip ≈ [1.0, 0.5, 1.0]
+    @test summary.class_pip[1, :] ≈ [0.0, 0.5, 0.5, 0.0]
+    @test summary.class_pip[2, :] ≈ [0.5, 0.5, 0.0, 0.0]
+    @test summary.class_pip[3, :] ≈ [0.0, 0.0, 0.0, 1.0]
+    @test summary.mean_delta ≈ [2.5, 1.5, 4.0]
+end
+
 @testset "BayesR variance sufficient statistics" begin
     α = Float64[0.0, 0.4, -0.3, 0.1, 0.0]
     δ = Int[1, 2, 4, 3, 1]
@@ -320,6 +340,97 @@ end
     @test all(isapprox.(marker_effects[!, :Model_Frequency], vec(sum(class_pips[:, 2:4], dims=2)); atol=1e-8))
     @test all(isapprox.(marker_effects[!, :Mean_Delta], class_pips * collect(1:4); atol=1e-8))
     @test haskey(output, "location parameters")
+    isdir(outdir) && rm(outdir, recursive=true)
+end
+
+@testset "BayesR fast-block inner/outer output" begin
+    global geno = get_genotypes(genofile, 1.0, separator=',',
+                                method="BayesR",
+                                Pi=Float64[0.95, 0.03, 0.015, 0.005],
+                                estimatePi=false,
+                                estimate_variance=false)
+    model = build_model("y1 = intercept + geno", 1.0)
+    outdir = tempname()
+    output = runMCMC(model, phenotypes,
+                     chain_length=12,
+                     burnin=1,
+                     output_samples_frequency=1,
+                     output_folder=outdir,
+                     seed=456,
+                     printout_model_info=false,
+                     outputEBV=false,
+                     output_heritability=false,
+                     fast_blocks=2,
+                     inner_outer_diagnostics=true)
+
+    marker_effects = output["marker effects geno"]
+    inner_columns = [
+        "InnerOuter_Samples",
+        "InnerOuter_Estimate",
+        "InnerOuter_SD",
+        "InnerOuter_Model_Frequency",
+        "InnerOuter_Mean_Delta",
+        "InnerOuter_Class1_PIP",
+        "InnerOuter_Class2_PIP",
+        "InnerOuter_Class3_PIP",
+        "InnerOuter_Class4_PIP",
+    ]
+    @test all(inner_columns .∈ Ref(names(marker_effects)))
+
+    expected_draws = zeros(UInt64, geno.nMarkers)
+    block_starts = model.MCMCinfo.fast_blocks
+    retained_outer = model.MCMCinfo.chain_length - model.MCMCinfo.burnin
+    for blocki in eachindex(block_starts)
+        block_start = block_starts[blocki]
+        block_end = blocki < length(block_starts) ? block_starts[blocki + 1] - 1 : geno.nMarkers
+        block_size = block_end - block_start + 1
+        expected_draws[block_start:block_end] .= retained_outer * block_size
+    end
+    @test marker_effects[!, :InnerOuter_Samples] == expected_draws
+
+    inner_class_columns = [
+        :InnerOuter_Class1_PIP,
+        :InnerOuter_Class2_PIP,
+        :InnerOuter_Class3_PIP,
+        :InnerOuter_Class4_PIP,
+    ]
+    inner_class_pips = Matrix(marker_effects[:, inner_class_columns])
+    @test all(isapprox.(sum(inner_class_pips, dims=2), 1.0; atol=1e-8))
+    @test all(isapprox.(
+        marker_effects[!, :InnerOuter_Model_Frequency],
+        vec(sum(inner_class_pips[:, 2:4], dims=2));
+        atol=1e-8,
+    ))
+    @test isfile(joinpath(outdir, "marker_effects_geno.txt"))
+    isdir(outdir) && rm(outdir, recursive=true)
+end
+
+@testset "BayesR inner/outer burnin uses outer iterations" begin
+    global geno = get_genotypes(genofile, 1.0, separator=',',
+                                method="BayesR",
+                                Pi=Float64[0.95, 0.03, 0.015, 0.005],
+                                estimatePi=false,
+                                estimate_variance=false)
+    model = build_model("y1 = intercept + geno", 1.0)
+    outdir = tempname()
+    err = try
+        runMCMC(model, phenotypes,
+                chain_length=12,
+                burnin=6,
+                output_samples_frequency=1,
+                output_folder=outdir,
+                seed=456,
+                printout_model_info=false,
+                outputEBV=false,
+                output_heritability=false,
+                fast_blocks=2,
+                inner_outer_diagnostics=true)
+        nothing
+    catch exc
+        exc
+    end
+    @test err isa ErrorException
+    @test occursin("outer chain length", sprint(showerror, err))
     isdir(outdir) && rm(outdir, recursive=true)
 end
 

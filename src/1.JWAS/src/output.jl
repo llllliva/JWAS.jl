@@ -152,6 +152,18 @@ function output_result(mme,output_folder,
               for classi in axes(whichclasspip,2)
                   marker_effects_output[!,Symbol("Class", classi, "_PIP")] = whichclasspip[:,classi]
               end
+              if Mi.innerOuterStats !== false
+                  inner_outer = summarize_bayesr_inner_outer(Mi.innerOuterStats)
+                  marker_effects_output[!,:InnerOuter_Samples] = inner_outer.draws
+                  marker_effects_output[!,:InnerOuter_Estimate] = inner_outer.effect_mean
+                  marker_effects_output[!,:InnerOuter_SD] = inner_outer.effect_sd
+                  marker_effects_output[!,:InnerOuter_Model_Frequency] = inner_outer.inclusion_pip
+                  marker_effects_output[!,:InnerOuter_Mean_Delta] = inner_outer.mean_delta
+                  for classi in axes(inner_outer.class_pip, 2)
+                      marker_effects_output[!,Symbol("InnerOuter_Class", classi, "_PIP")] =
+                          inner_outer.class_pip[:,classi]
+                  end
+              end
           end
           output["marker effects "*Mi.name]=marker_effects_output
           #output["marker effects variance "*Mi.name] = matrix2dataframe(string.(mme.lhsVec),Mi.meanVara,Mi.meanVara2)

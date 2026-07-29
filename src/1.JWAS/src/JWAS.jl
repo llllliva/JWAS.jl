@@ -111,6 +111,7 @@ end
             double_precision                = false,
             fast_blocks                     = false,
             independent_blocks              = false,
+            inner_outer_diagnostics          = false,
             memory_guard                    = :error,
             memory_guard_ratio              = 0.80,
             ##MCMC samples (defaut to marker effects and hyperparametes (variance components))
@@ -156,6 +157,7 @@ end
   * If `big_memory`=true, defaulting to `false`, a machine with  lots of memory is assumed which may speed up the analysis.
   * `fast_blocks` enables block marker updates. It can be `false`, `true`, a numeric block size, or a vector of explicit marker block starts such as `[1, 501, 1201]`.
   * `independent_blocks=false` keeps the exact sequential fast-block sweep. Set `independent_blocks=true` only when `fast_blocks != false` and you explicitly want the approximate mode that updates blocks from a sweep-level residual snapshot before reconciling all block changes.
+  * `inner_outer_diagnostics=true` records BayesR marker effects and class membership after every completed within-block sweep after burn-in. Existing posterior columns remain outer-iteration summaries; additional `InnerOuter_*` columns use all local block sweeps and count the terminal outer state once.
   * `memory_guard` controls the marker-memory precheck before MCMC (`:error`, `:warn`, `:off`; default `:error`).
   * `memory_guard_ratio` sets the allowed fraction of `Sys.total_memory()` for the precheck (default `0.80`).
 """
@@ -188,6 +190,7 @@ function runMCMC(mme::MME,df;
                 double_precision                = false,
                 fast_blocks                     = false,
                 independent_blocks              = false,
+                inner_outer_diagnostics          = false,
                 memory_guard                    = :error,
                 memory_guard_ratio::Float64     = 0.80,
                 #MCMC samples (defaut to marker effects and hyperparametes (variance componets))
@@ -269,7 +272,8 @@ function runMCMC(mme::MME,df;
                    printout_model_info,printout_frequency, single_step_analysis,
                    fitting_J_vector,missing_phenotypes,
                    update_priors_frequency,outputEBV,output_heritability,prediction_equation,
-                   seed,double_precision,output_folder,RRM,fast_blocks,independent_blocks)
+                   seed,double_precision,output_folder,RRM,fast_blocks,independent_blocks,
+                   inner_outer_diagnostics)
     ############################################################################
     # Check 1)Arguments; 2)Input Pedigree,Genotype,Phenotypes,
     #       3)output individual IDs; 4)Priors  5)Prediction equation
@@ -313,6 +317,21 @@ function runMCMC(mme::MME,df;
             mme.MCMCinfo.chain_length = Int(floor(chain_length/(mme.MCMCinfo.fast_blocks[2]-mme.MCMCinfo.fast_blocks[1]))) #number of outer loop
             println("BLOCK SIZE: $block_size")
             flush(stdout)
+        end
+    end
+    if inner_outer_diagnostics == true
+        mme.MCMCinfo.fast_blocks != false ||
+            error("inner_outer_diagnostics=true requires fast_blocks != false.")
+        mme.MCMCinfo.burnin < mme.MCMCinfo.chain_length ||
+            error("inner_outer_diagnostics=true requires burnin ($(mme.MCMCinfo.burnin)) to be smaller than the fast-block outer chain length ($(mme.MCMCinfo.chain_length)). fast_blocks converts chain_length to outer iterations but does not convert burnin; specify burnin in outer-iteration units.")
+        mme.M != 0 || error("inner_outer_diagnostics=true requires a BayesR genotype term.")
+        for Mi in mme.M
+            Mi.method == "BayesR" ||
+                error("inner_outer_diagnostics=true currently supports BayesR only.")
+            Mi.ntraits == 1 ||
+                error("inner_outer_diagnostics=true currently supports single-trait BayesR only.")
+            Mi.storage_mode == :dense ||
+                error("inner_outer_diagnostics=true currently supports dense BayesR genotypes only.")
         end
     end
     ############################################################################
@@ -586,6 +605,7 @@ function getMCMCinfo(mme)
     @printf("%-30s %20s\n","starting_value",mme.sol != false ? "true" : "false")
     @printf("%-30s %20d\n","printout_frequency",MCMCinfo.printout_frequency)
     @printf("%-30s %20d\n","output_samples_frequency",MCMCinfo.output_samples_frequency)
+    @printf("%-30s %19s\n","inner_outer_diagnostics",MCMCinfo.inner_outer_diagnostics ? "true" : "false")
     # @printf("%-30s %20s\n","constraint",MCMCinfo.constraint ? "true" : "false")
     @printf("%-30s %19s\n","constraint on residual variance",mme.R.constraint ? "true" : "false")
     if mme.M != 0

@@ -122,12 +122,16 @@ function MCMC_BayesianAlphabet(mme,df)
                 Mi.meanDelta = [zeros(Float64, Mi.nMarkers) for traiti = 1:Mi.ntraits]
                 Mi.meanDeltaRaw = [zeros(Float64, Mi.nMarkers) for traiti = 1:Mi.ntraits]
                 Mi.meanClassPIP = [zeros(Float64, Mi.nMarkers, length(BAYESR_GAMMA)) for traiti = 1:Mi.ntraits]
+                Mi.innerOuterStats = mme.MCMCinfo.inner_outer_diagnostics ?
+                    BayesRInnerOuterStats(Mi.nMarkers, length(BAYESR_GAMMA)) : false
                 if mme.MCMCinfo.printout_model_info == true
                     printstyled("BayesR gamma: $(Float64.(BAYESR_GAMMA))\n", bold=false, color=:green)
                     printstyled("BayesR starting pi: $(Float64.(Mi.π))\n", bold=false, color=:green)
                     expected_counts = round.(Mi.nMarkers .* Float64.(Mi.π), digits=2)
                     printstyled("BayesR expected class counts: $(expected_counts)\n", bold=false, color=:green)
                 end
+            else
+                Mi.innerOuterStats = false
             end
         end
     end
