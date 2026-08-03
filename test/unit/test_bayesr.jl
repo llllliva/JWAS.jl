@@ -70,6 +70,19 @@ end
         @test model.nModels == 1
     end
 
+    @testset "BayesR accepts a user-configured gamma vector" begin
+        custom_gamma = Float64[0.0, 0.001, 0.01, 0.1]
+        global geno = get_genotypes(genofile, 1.0, separator=',',
+                                    method="BayesR",
+                                    Pi=Float64[0.95, 0.03, 0.015, 0.005],
+                                    BayesR_gamma=custom_gamma,
+                                    estimatePi=false)
+        @test geno.bayesr_gamma == custom_gamma
+        @test_throws ErrorException get_genotypes(genofile, 1.0, separator=',',
+                                                  method="BayesR",
+                                                  BayesR_gamma=[0.0, 0.1, 0.01, 1.0])
+    end
+
     @testset "BayesR rejects bad Pi length" begin
         global geno = get_genotypes(genofile, 1.0, separator=',',
                                     method="BayesR",

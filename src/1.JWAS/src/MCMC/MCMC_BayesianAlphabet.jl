@@ -121,11 +121,11 @@ function MCMC_BayesianAlphabet(mme,df)
                 Mi.δ = [ones(Int, Mi.nMarkers) for traiti = 1:Mi.ntraits]
                 Mi.meanDelta = [zeros(Float64, Mi.nMarkers) for traiti = 1:Mi.ntraits]
                 Mi.meanDeltaRaw = [zeros(Float64, Mi.nMarkers) for traiti = 1:Mi.ntraits]
-                Mi.meanClassPIP = [zeros(Float64, Mi.nMarkers, length(BAYESR_GAMMA)) for traiti = 1:Mi.ntraits]
+                Mi.meanClassPIP = [zeros(Float64, Mi.nMarkers, length(bayesr_gamma(Mi))) for traiti = 1:Mi.ntraits]
                 Mi.innerOuterStats = mme.MCMCinfo.inner_outer_diagnostics ?
-                    BayesRInnerOuterStats(Mi.nMarkers, length(BAYESR_GAMMA)) : false
+                    BayesRInnerOuterStats(Mi.nMarkers, length(bayesr_gamma(Mi))) : false
                 if mme.MCMCinfo.printout_model_info == true
-                    printstyled("BayesR gamma: $(Float64.(BAYESR_GAMMA))\n", bold=false, color=:green)
+                    printstyled("BayesR gamma: $(Float64.(bayesr_gamma(Mi)))\n", bold=false, color=:green)
                     printstyled("BayesR starting pi: $(Float64.(Mi.π))\n", bold=false, color=:green)
                     expected_counts = round.(Mi.nMarkers .* Float64.(Mi.π), digits=2)
                     printstyled("BayesR expected class counts: $(expected_counts)\n", bold=false, color=:green)
@@ -260,6 +260,7 @@ function MCMC_BayesianAlphabet(mme,df)
                     end
                 elseif Mi.method == "BayesR"
                     if is_multi_trait
+                        bayesr_gamma(Mi) == BAYESR_GAMMA || error("Custom BayesR_gamma currently supports single-trait analyses only.")
                         fast_blocks == false || error("Annotated multi-trait BayesR v1 supports fast_blocks=false only.")
                         MTBayesR!(Mi, wArray, mme.R.val)
                     elseif fast_blocks == false

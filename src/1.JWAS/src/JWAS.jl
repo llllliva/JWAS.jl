@@ -11,6 +11,24 @@ import StatsBase: describe #a new describe is exported
 
 const BAYESR_GAMMA = Float64[0.0, 0.01, 0.1, 1.0]
 
+"""Validate and normalize a user-supplied four-class BayesR gamma vector."""
+function validate_bayesr_gamma(gamma)
+    gamma isa AbstractVector || error("BayesR_gamma must be a numeric vector of length 4.")
+    values = Float64.(collect(gamma))
+    length(values) == 4 || error("BayesR_gamma must have exactly 4 entries.")
+    all(isfinite, values) || error("BayesR_gamma entries must be finite.")
+    values[1] == 0.0 || error("BayesR_gamma[1] must be 0 for the null class.")
+    all(values[2:end] .> 0.0) || error("BayesR_gamma non-null entries must be positive.")
+    all(diff(values[2:end]) .> 0.0) || error("BayesR_gamma non-null entries must be strictly increasing.")
+    return values
+end
+
+"""Return the gamma vector attached to a genotype category."""
+function bayesr_gamma(Mi)
+    hasproperty(Mi, :bayesr_gamma) || return BAYESR_GAMMA
+    Mi.bayesr_gamma === false ? BAYESR_GAMMA : Mi.bayesr_gamma
+end
+
 #Models
 include("types.jl")
 include("markers/annotation_setup.jl")

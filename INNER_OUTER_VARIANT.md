@@ -20,6 +20,12 @@ inner_outer_diagnostics=true
 The option currently requires single-trait, dense-genotype BayesR with
 `fast_blocks != false`.
 
+The four class-variance multipliers can be changed per genotype category with
+`get_genotypes(...; BayesR_gamma=[0.0, 0.001, 0.01, 0.1])`. The null class must
+remain zero and the three non-null values must be positive and strictly
+increasing. Custom gamma vectors are currently restricted to single-trait
+BayesR, matching the inner--outer diagnostic restriction.
+
 For a numeric/default fast-block size, JWAS converts the requested
 `chain_length` to an outer-chain length using
 `floor(chain_length / block_size)`. It does not convert `burnin`. Specify

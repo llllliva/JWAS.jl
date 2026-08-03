@@ -103,7 +103,7 @@ end
 function BayesR!(genotypes, ycorr, vare)
     priors = genotypes.annotations === false ? genotypes.π : genotypes.annotations.snp_pi
     BayesR!(genotypes.mArray, genotypes.mRinvArray, genotypes.mpRinvm,
-            ycorr, genotypes.α[1], genotypes.δ[1], vare, genotypes.G.val, priors, BAYESR_GAMMA)
+            ycorr, genotypes.α[1], genotypes.δ[1], vare, genotypes.G.val, priors, bayesr_gamma(genotypes))
 end
 
 function BayesR_block!(genotypes, ycorr, vare, Rinv=ones(eltype(ycorr), length(ycorr)), independent_blocks=false)
@@ -115,7 +115,7 @@ function BayesR_block!(genotypes, ycorr, vare, Rinv, iter::Integer, burnin::Inte
     BayesR_block!(genotypes.MArray, genotypes.mpRinvm,
                   genotypes.genotypes, genotypes.MpRinvM,
                   ycorr, genotypes.α[1], genotypes.δ[1], vare,
-                  genotypes.G.val, priors, BAYESR_GAMMA, Rinv, iter, burnin,
+                  genotypes.G.val, priors, bayesr_gamma(genotypes), Rinv, iter, burnin,
                   independent_blocks, genotypes.innerOuterStats)
 end
 

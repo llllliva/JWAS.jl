@@ -116,6 +116,7 @@ mutable struct Genotypes
 #   df                #degree of freedom
 
   method            #prior for marker effects (Bayesian ALphabet, GBLUP ...)
+  bayesr_gamma::Union{Vector{Float64},Bool} #per-category BayesR class-variance multipliers
   estimatePi
 #   estimate_variance
 #   estimate_scale
@@ -160,7 +161,7 @@ mutable struct Genotypes
   Genotypes(a1,a2,a3,a4,a5,a6,a7,a8,a9)=new(false,false,
                                          a1,a2,a3,a4,a5,a6,a7,a8,a4,false,
                                          Variance(false,false,false,true,false,false),Variance(false,false,false,true,false,false), #false,false,
-                                         false,true, #true,false,
+                                         false,false,true, #true,false,
                                          false,false,false,false,false,false,false,false,false,
                                          false,false,false,false,
                                          false,false,false,false,false,false,false,false,false,false,false,

@@ -200,6 +200,9 @@ O3,0,0,2,1,1
   a dictionary such as `Pi=Dict([1.0; 1.0]=>0.7,[1.0; 0.0]=>0.1,[0.0; 1.0]=>0.1,[0.0; 0.0]=>0.1)`, defaulting to `all markers
   have effects (Pi = 0.0)` in single-trait analysis and `all markers have effects on all traits
   (Pi=Dict([1.0; 1.0]=>1.0,[0.0; 0.0]=>0.0))` in multi-trait analysis. `Pi` is estimated if `estimatePi` = true, , defaulting to `false`.
+* `BayesR_gamma` optionally sets the four BayesR class-variance multipliers for
+  single-trait BayesR. It must be strictly increasing after the null class,
+  start with zero, and defaults to `[0.0, 0.01, 0.1, 1.0]`.
 * Scale parameter for prior of marker effect variance is estimated if `estimate_scale` = true, defaulting to `false`.
 * `annotations` enables annotation-aware BayesC/BayesR. Supply a numeric matrix with one row per raw marker; JWAS prepends an intercept column internally after marker QC/filtering.
   `get_genotypes` validates and stores this raw annotation information. If a method's annotation prior depends on the eventual number of traits
@@ -212,7 +215,8 @@ O3,0,0,2,1,1
 """
 function get_genotypes(file::Union{AbstractString,Array{Float64,2},Array{Float32,2},Array{Int64,2}, Array{Int32,2}, Array{Any,2}, DataFrames.DataFrame}, G = false;
                        ## method:
-                       method = "BayesC", Pi = 0.0, estimatePi = true, 
+                       method = "BayesC", Pi = 0.0, estimatePi = true,
+                       BayesR_gamma = nothing,
                        ## variance:
                        G_is_marker_variance = false, df = 4.0,
                        estimate_variance = true, estimate_scale = false,
@@ -231,6 +235,13 @@ function get_genotypes(file::Union{AbstractString,Array{Float64,2},Array{Float32
     end
     if !(storage in (:dense,:stream))
         error("storage must be :dense or :stream.")
+    end
+
+    configured_bayesr_gamma = if method == "BayesR"
+        validate_bayesr_gamma(BayesR_gamma === nothing ? BAYESR_GAMMA : BayesR_gamma)
+    else
+        BayesR_gamma === nothing || error("BayesR_gamma can only be supplied with method=\"BayesR\".")
+        false
     end
 
     if storage == :stream
@@ -273,6 +284,7 @@ function get_genotypes(file::Union{AbstractString,Array{Float64,2},Array{Float32
         genotypes.G                = Variance(G_is_marker_variance ? G : false, df,false,estimate_variance,estimate_scale,constraint)
         genotypes.genetic_variance = Variance(G_is_marker_variance ? false : G, df,false,estimate_variance,estimate_scale,constraint)
         genotypes.method     = method
+        genotypes.bayesr_gamma = configured_bayesr_gamma
         genotypes.estimatePi = estimatePi
         genotypes.π          = annotation_starting_pi(annotation_matrix, method, Pi, backend.nMarkers)
         genotypes.annotation_start_pi = annotation_matrix === false ? false : copy_pi_input(genotypes.π)
@@ -425,6 +437,7 @@ function get_genotypes(file::Union{AbstractString,Array{Float64,2},Array{Float32
     genotypes.genetic_variance = Variance(G_is_marker_variance ? false : G, df,false,estimate_variance,estimate_scale,constraint) 
     
     genotypes.method     = method
+    genotypes.bayesr_gamma = configured_bayesr_gamma
     genotypes.estimatePi = estimatePi
     genotypes.π          = annotation_starting_pi(annotation_matrix, method, Pi, nMarkers)
     genotypes.annotation_start_pi = annotation_matrix === false ? false : copy_pi_input(genotypes.π)

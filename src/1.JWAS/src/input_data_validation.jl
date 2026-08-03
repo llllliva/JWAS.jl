@@ -43,6 +43,9 @@ function errors_args(mme)
                 end
             end
             if Mi.method == "BayesR"
+                if mme.nModels > 1 && bayesr_gamma(Mi) != BAYESR_GAMMA
+                    error("Custom BayesR_gamma currently supports single-trait analyses only.")
+                end
                 Mi.storage_mode == :dense || error("BayesR v1 supports storage=:dense only.")
                 mme.MCMCinfo.RRM == false || error("BayesR v1 does not support random regression model (RRM).")
                 if mme.nModels > 1
