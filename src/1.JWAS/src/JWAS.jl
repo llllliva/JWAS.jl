@@ -135,7 +135,7 @@ end
 
 * Markov chain Monte Carlo
     * The first `burnin` iterations are discarded at the beginning of a MCMC chain of length `chain_length`.
-      * Save MCMC samples every `output_samples_frequency` iterations, defaulting to `chain_length/1000`, to a folder `output_folder`,
+    * Save MCMC samples every `output_samples_frequency` iterations, defaulting to `chain_length/1000`, to a folder `output_folder`,
       defaulting to `results`. MCMC samples for hyperparametes (variance componets) and marker effects are saved by default.
       For BayesR, the integer class assignments are also saved in `MCMC_samples_delta_<genotype>_<trait>.txt`;
       class `1` is the null class and classes `2`--`4` are the non-null mixture classes.
@@ -264,6 +264,11 @@ function runMCMC(mme::MME,df;
     if independent_blocks == true && fast_blocks == false
         error("independent_blocks=true requires fast_blocks != false.")
     end
+    if mme.M != 0 && BayesR_gamma != BAYESR_GAMMA &&
+       any(Mi.method == "BayesR" for Mi in mme.M) &&
+       (mme.nModels != 1 || RRM != false)
+        error("Custom BayesR_gamma currently supports single-trait BayesR only.")
+    end
     #when using multi-thread, make sure the results are reproducible for users
     nThread = Threads.nthreads()
     if nThread>1
@@ -309,10 +314,6 @@ function runMCMC(mme::MME,df;
             SSBRrun(mme,df_whole,train_index,big_memory)
         end
         set_marker_hyperparameters_variances_and_pi(mme; bayesr_gamma=BayesR_gamma)
-        if BayesR_gamma != BAYESR_GAMMA && any(Mi.method == "BayesR" for Mi in mme.M) &&
-           (mme.nModels != 1 || RRM != false)
-            error("Custom BayesR_gamma currently supports single-trait BayesR only.")
-        end
     end
     ############################################################################
     #fast blocks #now only work for one geno
