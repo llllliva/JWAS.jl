@@ -19,9 +19,19 @@ function bayesr_validate_priors(π::AbstractMatrix, nclasses::Integer, nmarkers:
     return nothing
 end
 
-@inline function bayesr_block_nreps(iter::Integer, burnin::Integer, block_size::Integer)
+@inline function bayesr_block_nreps(iter::Integer, burnin::Integer, block_size::Integer,
+                                    inner_iterations=false)
     block_size < 1 && error("BayesR block_size must be at least 1.")
-    return iter <= burnin ? 1 : Int(block_size)
+    inner_iterations === false ||
+        (inner_iterations isa Integer && inner_iterations > 0) ||
+        error("BayesR inner_iterations must be false or a positive integer.")
+    if iter <= burnin
+        return 1
+    elseif inner_iterations === false
+        return Int(block_size)
+    else
+        return Int(inner_iterations)
+    end
 end
 
 mutable struct BayesRInnerOuterStats
@@ -93,20 +103,21 @@ function BayesR!(genotypes, ycorr, vare; bayesr_gamma=BAYESR_GAMMA)
 end
 
 function BayesR_block!(genotypes, ycorr, vare, Rinv=ones(eltype(ycorr), length(ycorr)), independent_blocks=false;
-                       bayesr_gamma=BAYESR_GAMMA, inner_outer_stats=false)
+                       bayesr_gamma=BAYESR_GAMMA, inner_outer_stats=false,
+                       bayesr_inner_iterations=false)
     BayesR_block!(genotypes, ycorr, vare, Rinv, typemax(Int), 0, independent_blocks,
-                  inner_outer_stats, bayesr_gamma)
+                  inner_outer_stats, bayesr_gamma, bayesr_inner_iterations)
 end
 
 function BayesR_block!(genotypes, ycorr, vare, Rinv, iter::Integer, burnin::Integer,
                        independent_blocks=false, inner_outer_stats=false,
-                       bayesr_gamma=BAYESR_GAMMA)
+                       bayesr_gamma=BAYESR_GAMMA, bayesr_inner_iterations=false)
     priors = genotypes.annotations === false ? genotypes.π : genotypes.annotations.snp_pi
     BayesR_block!(genotypes.MArray, genotypes.mpRinvm,
                   genotypes.genotypes, genotypes.MpRinvM,
                   ycorr, genotypes.α[1], genotypes.δ[1], vare,
                   genotypes.G.val, priors, bayesr_gamma, Rinv, iter, burnin,
-                  independent_blocks, inner_outer_stats)
+                  independent_blocks, inner_outer_stats, bayesr_inner_iterations)
 end
 
 function BayesR!(xArray, xRinvArray, xpRinvx,
@@ -180,14 +191,15 @@ function BayesR_block!(XArray, xpRinvx,
                        yCorr,
                        α, δ,
                        vare, sigmaSq, π, gamma, Rinv, iter::Integer, burnin::Integer,
-                       independent_blocks=false, inner_outer_stats=false)
+                       independent_blocks=false, inner_outer_stats=false,
+                       inner_iterations=false)
     if independent_blocks == true
         return BayesR_block_independent!(XArray, xpRinvx,
                                          X, XpRinvX,
                                          yCorr,
                                          α, δ,
                                          vare, sigmaSq, π, gamma, Rinv, iter, burnin,
-                                         inner_outer_stats)
+                                         inner_outer_stats, inner_iterations)
     end
 
     nclasses = length(gamma)
@@ -210,7 +222,7 @@ function BayesR_block!(XArray, xpRinvx,
         copyto!(view(αold_block, 1:block_size), view(α, block_range))
         XpRinvycorr = view(rhs_block, 1:block_size)
         block_rhs!(XpRinvycorr, XArray[i], yCorr, Rinv, unit_weights)
-        nreps = bayesr_block_nreps(iter, burnin, block_size)
+        nreps = bayesr_block_nreps(iter, burnin, block_size, inner_iterations)
 
         for reps in 1:nreps
             for j in 1:block_size
@@ -269,7 +281,7 @@ function BayesR_block_independent!(XArray, xpRinvx,
                                    yCorr,
                                    α, δ,
                                    vare, sigmaSq, π, gamma, Rinv, iter::Integer, burnin::Integer,
-                                   inner_outer_stats=false)
+                                   inner_outer_stats=false, inner_iterations=false)
     nclasses = length(gamma)
     bayesr_validate_priors(π, nclasses, length(α))
     sigmaSq > 0 || error("BayesR sigmaSq must be positive.")
@@ -293,7 +305,7 @@ function BayesR_block_independent!(XArray, xpRinvx,
         old_alpha = copy(view(α, block_range))
         XpRinvycorr = Vector{eltype(yCorr)}(undef, block_size)
         block_rhs!(XpRinvycorr, XArray[i], yCorr_snapshot, Rinv, unit_weights)
-        nreps = bayesr_block_nreps(iter, burnin, block_size)
+        nreps = bayesr_block_nreps(iter, burnin, block_size, inner_iterations)
 
         for reps in 1:nreps
             for j in 1:block_size

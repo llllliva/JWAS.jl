@@ -171,6 +171,7 @@ end
   * `fast_blocks` enables block marker updates. It can be `false`, `true`, a numeric block size, or a vector of explicit marker block starts such as `[1, 501, 1201]`.
   * `independent_blocks=false` keeps the exact sequential fast-block sweep. Set `independent_blocks=true` only when `fast_blocks != false` and you explicitly want the approximate mode that updates blocks from a sweep-level residual snapshot before reconciling all block changes.
   * `BayesR_gamma` sets the four BayesR class multipliers in increasing order, including the null class at zero; for example, `[0.0, 0.001, 0.1, 1.0]`. The default is `BAYESR_GAMMA` and custom values currently apply to single-trait BayesR.
+  * `BayesR_inner_iterations` optionally sets the number of post-burn-in inner marker-update repetitions per fast-block sweep. The default `false` preserves the legacy rule (`nreps=block_size`); burn-in always uses one repetition.
   * `inner_outer_diagnostics=true` records inner fast-block BayesR class draws and adds inner/outer PIP columns to the marker-effects output. It requires `fast_blocks != false` and single-trait, dense BayesR genotypes.
   * `memory_guard` controls the marker-memory precheck before MCMC (`:error`, `:warn`, `:off`; default `:error`).
   * `memory_guard_ratio` sets the allowed fraction of `Sys.total_memory()` for the precheck (default `0.80`).
@@ -205,6 +206,7 @@ function runMCMC(mme::MME,df;
                 fast_blocks                     = false,
                 independent_blocks              = false,
                 BayesR_gamma                    = BAYESR_GAMMA,
+                BayesR_inner_iterations        = false,
                 inner_outer_diagnostics          = false,
                 memory_guard                    = :error,
                 memory_guard_ratio::Float64     = 0.80,
@@ -264,6 +266,16 @@ function runMCMC(mme::MME,df;
     if independent_blocks == true && fast_blocks == false
         error("independent_blocks=true requires fast_blocks != false.")
     end
+    if BayesR_inner_iterations !== false
+        BayesR_inner_iterations isa Integer ||
+            error("BayesR_inner_iterations must be false or a positive integer.")
+        BayesR_inner_iterations > 0 ||
+            error("BayesR_inner_iterations must be positive.")
+        mme.M != 0 && any(Mi.method == "BayesR" for Mi in mme.M) ||
+            error("BayesR_inner_iterations requires a BayesR genotype term.")
+        fast_blocks != false ||
+            error("BayesR_inner_iterations requires fast_blocks != false.")
+    end
     if mme.M != 0 && BayesR_gamma != BAYESR_GAMMA &&
        any(Mi.method == "BayesR" for Mi in mme.M) &&
        (mme.nModels != 1 || RRM != false)
@@ -296,7 +308,7 @@ function runMCMC(mme::MME,df;
                    fitting_J_vector,missing_phenotypes,
                    update_priors_frequency,outputEBV,output_heritability,prediction_equation,
                    seed,double_precision,output_folder,RRM,fast_blocks,independent_blocks,
-                   inner_outer_diagnostics,copy(BayesR_gamma))
+                   inner_outer_diagnostics,copy(BayesR_gamma),BayesR_inner_iterations)
     ############################################################################
     # Check 1)Arguments; 2)Input Pedigree,Genotype,Phenotypes,
     #       3)output individual IDs; 4)Priors  5)Prediction equation
@@ -631,6 +643,7 @@ function getMCMCinfo(mme)
     @printf("%-30s %20s\n","output_marker_effect_samples",MCMCinfo.output_marker_effect_samples ? "true" : "false")
     @printf("%-30s %20s\n","inner_outer_diagnostics",MCMCinfo.inner_outer_diagnostics ? "true" : "false")
     @printf("%-30s %20s\n","BayesR_gamma",string(MCMCinfo.bayesr_gamma))
+    @printf("%-30s %20s\n","BayesR_inner_iterations",string(MCMCinfo.bayesr_inner_iterations))
     # @printf("%-30s %20s\n","constraint",MCMCinfo.constraint ? "true" : "false")
     @printf("%-30s %19s\n","constraint on residual variance",mme.R.constraint ? "true" : "false")
     if mme.M != 0

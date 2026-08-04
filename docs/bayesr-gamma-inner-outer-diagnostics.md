@@ -72,6 +72,19 @@ MediumLarge_Frequency
 
 Pi is still updated once per outer iteration from the current delta state. Inner/outer PIP is a diagnostic summary of all retained inner marker draws.
 
+### User-controlled inner iterations
+
+By default, the existing fast-block rule is retained: after burn-in, each block is repeated `block_size` times, while burn-in uses one repetition. To use the same number of inner iterations for every block, set:
+
+```julia
+runMCMC(model, phenotypes;
+    fast_blocks=block_starts,
+    inner_outer_diagnostics=true,
+    BayesR_inner_iterations=3)
+```
+
+With this setting, every retained outer sweep performs exactly three inner marker-update repetitions per block, including unequal chromosome blocks. Burn-in still performs one repetition per block. The setting is BayesR fast-block specific; omitting it (`false`) preserves the previous block-size behavior.
+
 ## MCMC output files
 
 For BayesR, the sampler writes the following additional files.

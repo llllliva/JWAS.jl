@@ -41,10 +41,12 @@ using JWAS.Datasets
                 independent_blocks=false,
                 inner_outer_diagnostics=true,
                 BayesR_gamma=gamma,
+                BayesR_inner_iterations=3,
             )
 
             marker_output = output["marker effects bayesr_gamma_innerouter_geno"]
             @test model.MCMCinfo.bayesr_gamma == gamma
+            @test model.MCMCinfo.bayesr_inner_iterations == 3
             @test all(Symbol(name) in propertynames(marker_output) for name in [
                 "InnerOuter_Samples",
                 "InnerOuter_Model_Frequency",
@@ -54,6 +56,7 @@ using JWAS.Datasets
                 "InnerOuter_Class4_PIP",
             ])
             @test all(marker_output.InnerOuter_Samples .> 0)
+            @test all(marker_output.InnerOuter_Samples .== 30)  # 10 retained outer × 3 inner
 
             class_variances = output["BayesR class variances bayesr_gamma_innerouter_geno"]
             @test class_variances.Gamma == gamma

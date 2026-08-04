@@ -102,6 +102,8 @@ In the current JWAS code:
 - for `fast_blocks=true` or numeric `fast_blocks`, outer `chain_length` is reduced by approximately `block_size`;
 - for explicit block starts, one MCMC iteration means one full sweep over the supplied blocks and JWAS does not rescale `chain_length`.
 
+For BayesR, `runMCMC(...; BayesR_inner_iterations=k)` overrides the post-burn-in `nreps` value and performs exactly `k` inner repetitions for every block. Burn-in continues to use one repetition. If omitted, BayesR retains the block-size rule above.
+
 This keeps effective marker-update work on a similar scale while moving much of the per-marker work from `nObs`-length operations to `block_size`-length operations.
 The explicit block-start form uses sweep semantics because user-provided LD or pedigree-informed blocks can have different sizes.
 

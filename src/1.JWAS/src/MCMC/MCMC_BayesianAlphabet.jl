@@ -17,6 +17,7 @@ function MCMC_BayesianAlphabet(mme,df)
     is_multi_trait           = mme.nModels != 1
     fast_blocks              = mme.MCMCinfo.fast_blocks
     bayesr_gamma             = mme.MCMCinfo.bayesr_gamma
+    bayesr_inner_iterations  = mme.MCMCinfo.bayesr_inner_iterations
     if is_multi_trait && mme.M != 0
         for Mi in mme.M
             supported_annotated_mt_bayesc = Mi.method == "BayesC" && mme.nModels == 2 && Mi.storage_mode == :dense && Mi.G.constraint == false
@@ -265,14 +266,16 @@ function MCMC_BayesianAlphabet(mme,df)
                     elseif fast_blocks == false
                         BayesR!(Mi, ycorr, mme.R.val; bayesr_gamma=bayesr_gamma)
                     else
-                        if Mi.innerOuterStats === false && bayesr_gamma == BAYESR_GAMMA
+                        if Mi.innerOuterStats === false && bayesr_gamma == BAYESR_GAMMA &&
+                           bayesr_inner_iterations === false
                             # Keep the original positional dispatch for default runs.
                             BayesR_block!(Mi, ycorr, mme.R.val, invweights, iter, burnin,
                                           mme.MCMCinfo.independent_blocks)
                         else
                             BayesR_block!(Mi, ycorr, mme.R.val, invweights, iter, burnin,
                                           mme.MCMCinfo.independent_blocks,
-                                          Mi.innerOuterStats, bayesr_gamma)
+                                          Mi.innerOuterStats, bayesr_gamma,
+                                          bayesr_inner_iterations)
                         end
                     end
                 elseif Mi.method =="RR-BLUP"
