@@ -6,6 +6,37 @@ end
 @inline bayesr_prior_row(π::AbstractVector, ::Integer) = π
 @inline bayesr_prior_row(π::AbstractMatrix, j::Integer) = view(π, j, :)
 
+function validate_bayesr_pi_sampler(pi_sampler)
+    sampler = if pi_sampler isa Symbol
+        Symbol(lowercase(String(pi_sampler)))
+    elseif pi_sampler isa AbstractString
+        Symbol(lowercase(strip(pi_sampler)))
+    else
+        error("BayesR_pi_sampler must be :standard or :collapsed.")
+    end
+    sampler in (:standard, :collapsed) ||
+        error("BayesR_pi_sampler must be :standard or :collapsed; got $(repr(pi_sampler)).")
+    return sampler
+end
+
+function bayesr_class_counts(delta, nclasses::Integer)
+    counts = zeros(Int, nclasses)
+    for class in delta
+        classi = Int(class)
+        1 <= classi <= nclasses ||
+            error("BayesR class assignment $classi is outside 1:$nclasses.")
+        counts[classi] += 1
+    end
+    return counts
+end
+
+@inline function bayesr_log_class_prior(pi_sampler::Symbol, πj, class_counts, classi::Integer)
+    if pi_sampler === :collapsed
+        return log(class_counts[classi] + 1.0)
+    end
+    return log(πj[classi])
+end
+
 function bayesr_validate_priors(π::AbstractVector, nclasses::Integer, ::Integer)
     length(π) == nclasses || error("BayesR pi vector length $(length(π)) must match the number of mixture classes ($nclasses).")
     all(x -> x >= 0, π) || error("BayesR pi entries must be nonnegative.")
@@ -96,40 +127,50 @@ function summarize_bayesr_inner_outer(stats::BayesRInnerOuterStats)
             class_pip=class_pip)
 end
 
-function BayesR!(genotypes, ycorr, vare; bayesr_gamma=BAYESR_GAMMA)
+function BayesR!(genotypes, ycorr, vare; bayesr_gamma=BAYESR_GAMMA,
+                 bayesr_pi_sampler=:standard)
     priors = genotypes.annotations === false ? genotypes.π : genotypes.annotations.snp_pi
     BayesR!(genotypes.mArray, genotypes.mRinvArray, genotypes.mpRinvm,
-            ycorr, genotypes.α[1], genotypes.δ[1], vare, genotypes.G.val, priors, bayesr_gamma)
+            ycorr, genotypes.α[1], genotypes.δ[1], vare, genotypes.G.val, priors, bayesr_gamma;
+            pi_sampler=bayesr_pi_sampler)
 end
 
 function BayesR_block!(genotypes, ycorr, vare, Rinv=ones(eltype(ycorr), length(ycorr)), independent_blocks=false;
                        bayesr_gamma=BAYESR_GAMMA, inner_outer_stats=false,
-                       bayesr_inner_iterations=false)
+                       bayesr_inner_iterations=false, bayesr_pi_sampler=:standard)
     BayesR_block!(genotypes, ycorr, vare, Rinv, typemax(Int), 0, independent_blocks,
-                  inner_outer_stats, bayesr_gamma, bayesr_inner_iterations)
+                  inner_outer_stats, bayesr_gamma, bayesr_inner_iterations;
+                  bayesr_pi_sampler=bayesr_pi_sampler)
 end
 
 function BayesR_block!(genotypes, ycorr, vare, Rinv, iter::Integer, burnin::Integer,
                        independent_blocks=false, inner_outer_stats=false,
-                       bayesr_gamma=BAYESR_GAMMA, bayesr_inner_iterations=false)
+                       bayesr_gamma=BAYESR_GAMMA, bayesr_inner_iterations=false;
+                       bayesr_pi_sampler=:standard)
     priors = genotypes.annotations === false ? genotypes.π : genotypes.annotations.snp_pi
     BayesR_block!(genotypes.MArray, genotypes.mpRinvm,
                   genotypes.genotypes, genotypes.MpRinvM,
                   ycorr, genotypes.α[1], genotypes.δ[1], vare,
                   genotypes.G.val, priors, bayesr_gamma, Rinv, iter, burnin,
-                  independent_blocks, inner_outer_stats, bayesr_inner_iterations)
+                  independent_blocks, inner_outer_stats, bayesr_inner_iterations;
+                  pi_sampler=bayesr_pi_sampler)
 end
 
 function BayesR!(xArray, xRinvArray, xpRinvx,
                  yCorr,
                  α, δ,
-                 vare, sigmaSq, π, gamma)
+                 vare, sigmaSq, π, gamma;
+                 pi_sampler=:standard)
+    pi_sampler = validate_bayesr_pi_sampler(pi_sampler)
     nclasses = length(gamma)
     bayesr_validate_priors(π, nclasses, length(α))
+    pi_sampler === :collapsed && π isa AbstractMatrix &&
+        error("Collapsed BayesR pi sampling requires one global pi vector.")
     sigmaSq > 0 || error("BayesR sigmaSq must be positive.")
 
     log_probs = zeros(Float64, nclasses)
     probs = zeros(Float64, nclasses)
+    class_counts = pi_sampler === :collapsed ? bayesr_class_counts(δ, nclasses) : nothing
     invVarRes = 1 / vare
 
     for j in eachindex(α)
@@ -138,15 +179,20 @@ function BayesR!(xArray, xRinvArray, xpRinvx,
         rhs = (dot(xRinv, yCorr) + xpRinvx[j] * α[j]) * invVarRes
         oldAlpha = α[j]
         πj = bayesr_prior_row(π, j)
+        if pi_sampler === :collapsed
+            old_class = Int(δ[j])
+            class_counts[old_class] -= 1
+        end
 
-        log_probs[1] = log(πj[1])
+        log_probs[1] = bayesr_log_class_prior(pi_sampler, πj, class_counts, 1)
         for k in 2:nclasses
             varEffect = gamma[k] * sigmaSq
             invVarEffect = 1 / varEffect
             lhs = xpRinvx[j] * invVarRes + invVarEffect
             invLhs = 1 / lhs
             betaHat = invLhs * rhs
-            log_probs[k] = 0.5 * (log(invLhs) - log(varEffect) + betaHat * rhs) + log(πj[k])
+            log_probs[k] = 0.5 * (log(invLhs) - log(varEffect) + betaHat * rhs) +
+                           bayesr_log_class_prior(pi_sampler, πj, class_counts, k)
         end
 
         log_norm = bayesr_logsumexp(log_probs)
@@ -156,6 +202,9 @@ function BayesR!(xArray, xRinvArray, xpRinvx,
 
         sampled_class = rand(Categorical(probs))
         δ[j] = sampled_class
+        if pi_sampler === :collapsed
+            class_counts[sampled_class] += 1
+        end
 
         if sampled_class == 1
             if oldAlpha != 0
@@ -192,22 +241,30 @@ function BayesR_block!(XArray, xpRinvx,
                        α, δ,
                        vare, sigmaSq, π, gamma, Rinv, iter::Integer, burnin::Integer,
                        independent_blocks=false, inner_outer_stats=false,
-                       inner_iterations=false)
+                       inner_iterations=false;
+                       pi_sampler=:standard)
+    pi_sampler = validate_bayesr_pi_sampler(pi_sampler)
     if independent_blocks == true
+        pi_sampler === :collapsed &&
+            error("Collapsed BayesR pi sampling requires independent_blocks=false.")
         return BayesR_block_independent!(XArray, xpRinvx,
                                          X, XpRinvX,
                                          yCorr,
                                          α, δ,
                                          vare, sigmaSq, π, gamma, Rinv, iter, burnin,
-                                         inner_outer_stats, inner_iterations)
+                                         inner_outer_stats, inner_iterations;
+                                         pi_sampler=pi_sampler)
     end
 
     nclasses = length(gamma)
     bayesr_validate_priors(π, nclasses, length(α))
+    pi_sampler === :collapsed && π isa AbstractMatrix &&
+        error("Collapsed BayesR pi sampling requires one global pi vector.")
     sigmaSq > 0 || error("BayesR sigmaSq must be positive.")
 
     log_probs = zeros(Float64, nclasses)
     probs = zeros(Float64, nclasses)
+    class_counts = pi_sampler === :collapsed ? bayesr_class_counts(δ, nclasses) : nothing
     invVarRes = 1 / vare
     nblocks = length(XpRinvX)
     start_pos = 0
@@ -230,15 +287,20 @@ function BayesR_block!(XArray, xpRinvx,
                 rhs = (XpRinvycorr[j] + xpRinvx[locus_j] * α[locus_j]) * invVarRes
                 oldAlpha = α[locus_j]
                 πj = bayesr_prior_row(π, locus_j)
+                if pi_sampler === :collapsed
+                    old_class = Int(δ[locus_j])
+                    class_counts[old_class] -= 1
+                end
 
-                log_probs[1] = log(πj[1])
+                log_probs[1] = bayesr_log_class_prior(pi_sampler, πj, class_counts, 1)
                 for k in 2:nclasses
                     varEffect = gamma[k] * sigmaSq
                     invVarEffect = 1 / varEffect
                     lhs = xpRinvx[locus_j] * invVarRes + invVarEffect
                     invLhs = 1 / lhs
                     betaHat = invLhs * rhs
-                    log_probs[k] = 0.5 * (log(invLhs) - log(varEffect) + betaHat * rhs) + log(πj[k])
+                    log_probs[k] = 0.5 * (log(invLhs) - log(varEffect) + betaHat * rhs) +
+                                   bayesr_log_class_prior(pi_sampler, πj, class_counts, k)
                 end
 
                 log_norm = bayesr_logsumexp(log_probs)
@@ -248,6 +310,9 @@ function BayesR_block!(XArray, xpRinvx,
 
                 sampled_class = rand(Categorical(probs))
                 δ[locus_j] = sampled_class
+                if pi_sampler === :collapsed
+                    class_counts[sampled_class] += 1
+                end
 
                 if sampled_class == 1
                     α[locus_j] = zero(eltype(α))
@@ -281,7 +346,11 @@ function BayesR_block_independent!(XArray, xpRinvx,
                                    yCorr,
                                    α, δ,
                                    vare, sigmaSq, π, gamma, Rinv, iter::Integer, burnin::Integer,
-                                   inner_outer_stats=false, inner_iterations=false)
+                                   inner_outer_stats=false, inner_iterations=false;
+                                   pi_sampler=:standard)
+    pi_sampler = validate_bayesr_pi_sampler(pi_sampler)
+    pi_sampler === :collapsed &&
+        error("Collapsed BayesR pi sampling requires independent_blocks=false.")
     nclasses = length(gamma)
     bayesr_validate_priors(π, nclasses, length(α))
     sigmaSq > 0 || error("BayesR sigmaSq must be positive.")

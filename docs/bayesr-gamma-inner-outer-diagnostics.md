@@ -29,6 +29,17 @@ The default remains:
 const BAYESR_GAMMA = Float64[0.0, 0.01, 0.1, 1.0]
 ```
 
+When the keyword is omitted, JWAS also accepts a comma-separated environment
+value:
+
+```bash
+export BAYESR_GAMMA="0,0.001,0.1,1"
+```
+
+An explicit `BayesR_gamma=[...]` keyword takes precedence over the environment.
+If `BAYESR_GAMMA` is missing or blank, JWAS uses the package default above.
+Malformed or invalid environment values stop the run before MCMC starts.
+
 Therefore, `[0.0, 0.001, 0.1, 1.0]` is a user-supplied setting and is not the default. The input is validated and copied into the model's `MCMCinfo` state. Custom gamma currently supports single-trait BayesR.
 
 The supplied gamma is used consistently for:
@@ -138,7 +149,7 @@ The summary contains `Class`, `Gamma`, `Estimate`, and `SD` columns. The null-cl
 
 ## Default behavior and compatibility
 
-When `BayesR_gamma` is omitted and `inner_outer_diagnostics=false`, the original default gamma and legacy fast-block dispatch are retained. The added keyword arguments are opt-in, and non-BayesR methods do not use the new diagnostic state.
+When `BayesR_gamma` is omitted and `BAYESR_GAMMA` is missing or blank, the original default gamma is retained. The explicit keyword overrides the environment. Other Bayesian alphabet methods do not use the BayesR gamma state.
 
 ## Validation
 

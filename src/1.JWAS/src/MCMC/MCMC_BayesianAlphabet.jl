@@ -18,6 +18,7 @@ function MCMC_BayesianAlphabet(mme,df)
     fast_blocks              = mme.MCMCinfo.fast_blocks
     bayesr_gamma             = mme.MCMCinfo.bayesr_gamma
     bayesr_inner_iterations  = mme.MCMCinfo.bayesr_inner_iterations
+    bayesr_pi_sampler        = mme.MCMCinfo.bayesr_pi_sampler
     if is_multi_trait && mme.M != 0
         for Mi in mme.M
             supported_annotated_mt_bayesc = Mi.method == "BayesC" && mme.nModels == 2 && Mi.storage_mode == :dense && Mi.G.constraint == false
@@ -120,7 +121,12 @@ function MCMC_BayesianAlphabet(mme,df)
                 end
             end
             if Mi.method == "BayesR"
-                Mi.δ = [ones(Int, Mi.nMarkers) for traiti = 1:Mi.ntraits]
+                if bayesr_pi_sampler === :collapsed
+                    starting_distribution = Categorical(Float64.(Mi.π))
+                    Mi.δ = [rand(starting_distribution, Mi.nMarkers)]
+                else
+                    Mi.δ = [ones(Int, Mi.nMarkers) for traiti = 1:Mi.ntraits]
+                end
                 Mi.meanDelta = [zeros(Float64, Mi.nMarkers) for traiti = 1:Mi.ntraits]
                 Mi.meanDeltaClass = [zeros(Float64, Mi.nMarkers, length(bayesr_gamma)) for traiti = 1:Mi.ntraits]
                 Mi.innerOuterStats = mme.MCMCinfo.inner_outer_diagnostics ?
@@ -130,6 +136,7 @@ function MCMC_BayesianAlphabet(mme,df)
                 if mme.MCMCinfo.printout_model_info == true
                     printstyled("BayesR gamma: $(Float64.(bayesr_gamma))\n", bold=false, color=:green)
                     printstyled("BayesR starting pi: $(Float64.(Mi.π))\n", bold=false, color=:green)
+                    printstyled("BayesR pi sampler: $bayesr_pi_sampler\n", bold=false, color=:green)
                     expected_counts = round.(Mi.nMarkers .* Float64.(Mi.π), digits=2)
                     printstyled("BayesR expected class counts: $(expected_counts)\n", bold=false, color=:green)
                 end
@@ -264,9 +271,12 @@ function MCMC_BayesianAlphabet(mme,df)
                         fast_blocks == false || error("Annotated multi-trait BayesR v1 supports fast_blocks=false only.")
                         MTBayesR!(Mi, wArray, mme.R.val)
                     elseif fast_blocks == false
-                        BayesR!(Mi, ycorr, mme.R.val; bayesr_gamma=bayesr_gamma)
+                        BayesR!(Mi, ycorr, mme.R.val;
+                                bayesr_gamma=bayesr_gamma,
+                                bayesr_pi_sampler=bayesr_pi_sampler)
                     else
-                        if Mi.innerOuterStats === false && bayesr_gamma == BAYESR_GAMMA &&
+                        if bayesr_pi_sampler === :standard &&
+                           Mi.innerOuterStats === false && bayesr_gamma == BAYESR_GAMMA &&
                            bayesr_inner_iterations === false
                             # Keep the original positional dispatch for default runs.
                             BayesR_block!(Mi, ycorr, mme.R.val, invweights, iter, burnin,
@@ -275,7 +285,8 @@ function MCMC_BayesianAlphabet(mme,df)
                             BayesR_block!(Mi, ycorr, mme.R.val, invweights, iter, burnin,
                                           mme.MCMCinfo.independent_blocks,
                                           Mi.innerOuterStats, bayesr_gamma,
-                                          bayesr_inner_iterations)
+                                          bayesr_inner_iterations;
+                                          bayesr_pi_sampler=bayesr_pi_sampler)
                         end
                     end
                 elseif Mi.method =="RR-BLUP"

@@ -253,6 +253,7 @@ mutable struct MCMCinfo
     inner_outer_diagnostics
     bayesr_gamma
     bayesr_inner_iterations
+    bayesr_pi_sampler
 end
 ################################################################################
 #the class MME is shown below with members for models, mixed model equations...

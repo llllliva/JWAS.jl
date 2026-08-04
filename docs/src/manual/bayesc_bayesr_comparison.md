@@ -111,6 +111,34 @@ In that step, `sigmaSq` is the shared **marker-effect variance** scale, while
 | `Annotated_BayesC` | Run the ordinary BayesC marker sweep using the current marker-level `π_j`. | After the marker sweep, sample annotation liabilities and annotation coefficients, then rewrite the full marker-level exclusion vector `π_j`. | Update BayesC marker-effect variance `G`, then update residual variance. |
 | `Annotated_BayesR` | Run the ordinary BayesR marker sweep using the current marker-level four-class prior matrix `snp_pi`. | After the marker sweep, construct `z1 = 1(δ > 1)`, `z2 = 1(δ > 2)`, `z3 = 1(δ > 3)`, fit the three annotation submodels, then rebuild the full marker-level four-class prior matrix `snp_pi`. | Update shared BayesR `sigmaSq`, then update residual variance. |
 
+## Optional Collapsed Pi Sampler
+
+Ordinary single-trait BayesR can integrate the shared mixture vector `pi` out
+of each marker-class update:
+
+```julia
+out = runMCMC(
+    model,
+    phenotypes;
+    BayesR_pi_sampler=:collapsed,
+)
+```
+
+The default is `BayesR_pi_sampler=:standard`, which preserves the existing
+sampled-`pi` Gibbs transition. With the existing `Dirichlet(1,1,1,1)` prior,
+the collapsed class weight for marker `j` is proportional to
+`n_without_j[k] + 1`, multiplied by the same class-specific marker likelihood
+used by the standard sampler. JWAS still draws `pi` from the completed class
+counts after each outer iteration so that posterior `pi` summaries remain
+available; that draw is not used by the following collapsed marker sweep.
+
+The collapsed option currently requires `estimatePi=true`, one global BayesR
+`Pi` vector, a dense unannotated single-trait model, and
+`independent_blocks=false`. It works with both conventional sweeps and
+sequential `fast_blocks`. It is an alternative MCMC transition for the same
+posterior under the current prior, not a new sparsity prior or a guaranteed PIP
+inflation correction.
+
 ## Key Distinctions
 
 | Comparison | Main difference |

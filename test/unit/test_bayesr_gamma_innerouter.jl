@@ -19,6 +19,24 @@ using JWAS.Datasets
     @test JWAS.resolve_bayesr_inner_iterations(4; env=Dict("BAYESR_INNER_ITERATIONS" => "3")) == 4
     @test_throws ErrorException JWAS.resolve_bayesr_inner_iterations(true; env=empty_env)
     @test_throws ErrorException JWAS.resolve_bayesr_inner_iterations(false; env=Dict("BAYESR_INNER_ITERATIONS" => "0"))
+
+    @test JWAS.resolve_bayesr_gamma(nothing; env=empty_env) == JWAS.BAYESR_GAMMA
+    @test JWAS.resolve_bayesr_gamma(nothing; env=Dict("BAYESR_GAMMA" => " 0, 0.001, 0.1, 1 ")) ==
+        [0.0, 0.001, 0.1, 1.0]
+    @test JWAS.resolve_bayesr_gamma(
+        [0.0, 0.002, 0.2, 2.0];
+        env=Dict("BAYESR_GAMMA" => "0,0.001,0.1,1"),
+    ) == [0.0, 0.002, 0.2, 2.0]
+    @test JWAS.resolve_bayesr_gamma(nothing; env=Dict("BAYESR_GAMMA" => "   ")) ==
+        JWAS.BAYESR_GAMMA
+    @test_throws ErrorException JWAS.resolve_bayesr_gamma(
+        nothing;
+        env=Dict("BAYESR_GAMMA" => "0,not-a-number,0.1,1"),
+    )
+    @test_throws ErrorException JWAS.resolve_bayesr_gamma(
+        nothing;
+        env=Dict("BAYESR_GAMMA" => "0,0.1,0.01,1"),
+    )
 end
 
 @testset "BayesR gamma input and inner/outer diagnostics" begin
@@ -46,6 +64,7 @@ end
             output = withenv(
                 "BAYESR_BLOCK_STARTS" => "1,3,5",
                 "BAYESR_INNER_ITERATIONS" => "3",
+                "BAYESR_GAMMA" => "0,0.01,0.1,1",
             ) do
                 runMCMC(
                     model,
@@ -107,6 +126,7 @@ end
             automatic_output = withenv(
                 "BAYESR_BLOCK_STARTS" => "1,3,5",
                 "BAYESR_INNER_ITERATIONS" => nothing,
+                "BAYESR_GAMMA" => join(gamma, ","),
             ) do
                 runMCMC(
                     automatic_model,
@@ -122,10 +142,13 @@ end
                     fast_blocks=true,
                     independent_blocks=false,
                     inner_outer_diagnostics=true,
-                    BayesR_gamma=gamma,
                 )
             end
             automatic_markers = automatic_output["marker effects bayesr_gamma_innerouter_auto_geno"]
+            automatic_class_variances =
+                automatic_output["BayesR class variances bayesr_gamma_innerouter_auto_geno"]
+            @test automatic_model.MCMCinfo.bayesr_gamma == gamma
+            @test automatic_class_variances.Gamma == gamma
             @test automatic_model.MCMCinfo.bayesr_inner_iterations === false
             @test automatic_markers.InnerOuter_Samples == UInt64[20, 20, 20, 20, 10]
         end
