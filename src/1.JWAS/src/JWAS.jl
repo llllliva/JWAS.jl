@@ -79,6 +79,46 @@ function validate_fast_block_starts(block_starts::AbstractVector{<:Integer}, nma
     return nothing
 end
 
+function resolve_bayesr_fast_blocks(fast_blocks; env=ENV)
+    fast_blocks === true || return fast_blocks
+
+    raw_starts = strip(get(env, "BAYESR_BLOCK_STARTS", ""))
+    isempty(raw_starts) && return true
+
+    tokens = strip.(split(raw_starts, ","))
+    any(isempty, tokens) &&
+        error("BAYESR_BLOCK_STARTS must be a comma-separated list of positive integers.")
+    block_starts = try
+        parse.(Int, tokens)
+    catch
+        error("BAYESR_BLOCK_STARTS must be a comma-separated list of positive integers.")
+    end
+    first(block_starts) == 1 || error("BAYESR_BLOCK_STARTS must begin with 1.")
+    all(block_starts .> 0) || error("BAYESR_BLOCK_STARTS must contain positive indices.")
+    all(diff(block_starts) .> 0) ||
+        error("BAYESR_BLOCK_STARTS must be strictly increasing.")
+    return block_starts
+end
+
+function resolve_bayesr_inner_iterations(inner_iterations; env=ENV)
+    if inner_iterations !== false
+        inner_iterations isa Integer && !(inner_iterations isa Bool) && inner_iterations > 0 ||
+            error("BayesR_inner_iterations must be false or a positive integer.")
+        return Int(inner_iterations)
+    end
+
+    raw_value = lowercase(strip(get(env, "BAYESR_INNER_ITERATIONS", "")))
+    raw_value in ("", "false", "auto") && return false
+    resolved = try
+        parse(Int, raw_value)
+    catch
+        error("BAYESR_INNER_ITERATIONS must be false, auto, or a positive integer.")
+    end
+    resolved > 0 ||
+        error("BAYESR_INNER_ITERATIONS must be false, auto, or a positive integer.")
+    return resolved
+end
+
 function validate_bayesr_gamma(gamma::AbstractVector{<:Real})
     length(gamma) == 4 || error("BayesR_gamma must contain exactly four class multipliers.")
     all(isfinite, gamma) || error("BayesR_gamma must contain only finite values.")
@@ -171,7 +211,8 @@ end
   * `fast_blocks` enables block marker updates. It can be `false`, `true`, a numeric block size, or a vector of explicit marker block starts such as `[1, 501, 1201]`.
   * `independent_blocks=false` keeps the exact sequential fast-block sweep. Set `independent_blocks=true` only when `fast_blocks != false` and you explicitly want the approximate mode that updates blocks from a sweep-level residual snapshot before reconciling all block changes.
   * `BayesR_gamma` sets the four BayesR class multipliers in increasing order, including the null class at zero; for example, `[0.0, 0.001, 0.1, 1.0]`. The default is `BAYESR_GAMMA` and custom values currently apply to single-trait BayesR.
-  * `BayesR_inner_iterations` optionally sets the number of post-burn-in inner marker-update repetitions per fast-block sweep. The default `false` preserves the legacy rule (`nreps=block_size`); burn-in always uses one repetition.
+  * `BayesR_inner_iterations` optionally sets the number of post-burn-in inner marker-update repetitions per fast-block sweep. The default `false` preserves the calculated legacy rule (`nreps=block_size`); burn-in always uses one repetition. When the keyword is `false`, `BAYESR_INNER_ITERATIONS` may be set to a positive integer in the environment, while missing, `false`, or `auto` retains the calculated default.
+  * When `fast_blocks=true`, a comma-separated `BAYESR_BLOCK_STARTS` environment value may provide explicit 1-based block starts. Explicit numeric or vector `fast_blocks` keywords take precedence.
   * `inner_outer_diagnostics=true` records inner fast-block BayesR class draws and adds inner/outer PIP columns to the marker-effects output. It requires `fast_blocks != false` and single-trait, dense BayesR genotypes.
   * `memory_guard` controls the marker-memory precheck before MCMC (`:error`, `:warn`, `:off`; default `:error`).
   * `memory_guard_ratio` sets the allowed fraction of `Sys.total_memory()` for the precheck (default `0.80`).
@@ -238,6 +279,12 @@ function runMCMC(mme::MME,df;
             end
         end
     end
+    has_bayesr = mme.M != 0 && any(Mi.method == "BayesR" for Mi in mme.M)
+    if has_bayesr
+        fast_blocks = resolve_bayesr_fast_blocks(fast_blocks)
+        BayesR_inner_iterations =
+            resolve_bayesr_inner_iterations(BayesR_inner_iterations)
+    end
     if categorical_trait != false || censored_trait != false
         print_single_categorical_censored_trait_example()
         error("The arguments 'categorical_trait' and  'censored_trait' has been moved to build_model(). Please check our latest example.")
@@ -271,7 +318,7 @@ function runMCMC(mme::MME,df;
             error("BayesR_inner_iterations must be false or a positive integer.")
         BayesR_inner_iterations > 0 ||
             error("BayesR_inner_iterations must be positive.")
-        mme.M != 0 && any(Mi.method == "BayesR" for Mi in mme.M) ||
+        has_bayesr ||
             error("BayesR_inner_iterations requires a BayesR genotype term.")
         fast_blocks != false ||
             error("BayesR_inner_iterations requires fast_blocks != false.")

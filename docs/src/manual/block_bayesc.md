@@ -104,6 +104,13 @@ In the current JWAS code:
 
 For BayesR, `runMCMC(...; BayesR_inner_iterations=k)` overrides the post-burn-in `nreps` value and performs exactly `k` inner repetitions for every block. Burn-in continues to use one repetition. If omitted, BayesR retains the block-size rule above.
 
+For batch drivers, `BAYESR_BLOCK_STARTS="1,5001,9201"` supplies explicit
+block starts when the driver calls `fast_blocks=true`.
+`BAYESR_INNER_ITERATIONS=300` supplies a fixed inner count when the driver
+leaves `BayesR_inner_iterations=false`; an absent value, `false`, or `auto`
+retains the calculated per-block-size rule. Explicit numeric or vector Julia
+keywords take precedence over these environment fallbacks.
+
 This keeps effective marker-update work on a similar scale while moving much of the per-marker work from `nObs`-length operations to `block_size`-length operations.
 The explicit block-start form uses sweep semantics because user-provided LD or pedigree-informed blocks can have different sizes.
 

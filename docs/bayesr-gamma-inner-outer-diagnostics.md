@@ -85,6 +85,22 @@ runMCMC(model, phenotypes;
 
 With this setting, every retained outer sweep performs exactly three inner marker-update repetitions per block, including unequal chromosome blocks. Burn-in still performs one repetition per block. The setting is BayesR fast-block specific; omitting it (`false`) preserves the previous block-size behavior.
 
+Farm or other batch wrappers may also provide these settings through the
+environment:
+
+```bash
+export BAYESR_BLOCK_STARTS="1,5001,9201"
+export BAYESR_INNER_ITERATIONS="300"  # or false/auto
+```
+
+When `runMCMC` receives `fast_blocks=true`, `BAYESR_BLOCK_STARTS` is resolved
+to an explicit block-start vector, so the requested chain length is interpreted
+as outer sweeps and is not divided by the automatic square-root block size.
+When `BayesR_inner_iterations=false`, a positive environment value supplies a
+fixed count. If the environment value is absent, `false`, or `auto`, JWAS
+calculates inner repetitions separately from each block's marker count. Direct
+numeric/vector keyword arguments take precedence over these fallbacks.
+
 ## MCMC output files
 
 For BayesR, the sampler writes the following additional files.
@@ -126,4 +142,4 @@ When `BayesR_gamma` is omitted and `inner_outer_diagnostics=false`, the original
 
 ## Validation
 
-The focused test covers custom gamma, inner/outer PIP, class-variance outputs, and delta traces. The full test suite passed with 997 tests.
+The focused test covers custom gamma, runtime-option fallback, automatic and fixed inner iterations, inner/outer PIP, class-variance outputs, and delta traces. The full test suite passed with 1,016 tests.
