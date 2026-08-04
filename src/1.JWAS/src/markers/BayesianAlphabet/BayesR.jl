@@ -24,22 +24,89 @@ end
     return iter <= burnin ? 1 : Int(block_size)
 end
 
-function BayesR!(genotypes, ycorr, vare)
+mutable struct BayesRInnerOuterStats
+    class_counts::Matrix{UInt64}
+    effect_sum::Vector{Float64}
+    effect_sum2::Vector{Float64}
+    draws::Vector{UInt64}
+end
+
+function BayesRInnerOuterStats(nmarkers::Integer, nclasses::Integer)
+    nmarkers > 0 || error("BayesR inner/outer diagnostics require at least one marker.")
+    nclasses > 1 || error("BayesR inner/outer diagnostics require at least two classes.")
+    return BayesRInnerOuterStats(
+        zeros(UInt64, nmarkers, nclasses),
+        zeros(Float64, nmarkers),
+        zeros(Float64, nmarkers),
+        zeros(UInt64, nmarkers),
+    )
+end
+
+@inline function record_bayesr_inner_draw!(stats::BayesRInnerOuterStats,
+                                           effect,
+                                           sampled_class::Integer,
+                                           marker::Integer)
+    1 <= sampled_class <= size(stats.class_counts, 2) ||
+        error("BayesR sampled class $sampled_class is outside the diagnostics class range.")
+    effect64 = Float64(effect)
+    stats.class_counts[marker, sampled_class] += 1
+    stats.effect_sum[marker] += effect64
+    stats.effect_sum2[marker] += effect64 * effect64
+    stats.draws[marker] += 1
+    return nothing
+end
+
+function summarize_bayesr_inner_outer(stats::BayesRInnerOuterStats)
+    nmarkers, nclasses = size(stats.class_counts)
+    effect_mean = fill(NaN, nmarkers)
+    effect_sd = fill(NaN, nmarkers)
+    inclusion_pip = fill(NaN, nmarkers)
+    mean_delta = fill(NaN, nmarkers)
+    class_pip = fill(NaN, nmarkers, nclasses)
+
+    for marker in 1:nmarkers
+        ndraws = stats.draws[marker]
+        ndraws == 0 && continue
+        denom = Float64(ndraws)
+        effect_mean[marker] = stats.effect_sum[marker] / denom
+        effect_second_moment = stats.effect_sum2[marker] / denom
+        effect_sd[marker] = sqrt(max(0.0, effect_second_moment - effect_mean[marker]^2))
+        for classi in 1:nclasses
+            class_pip[marker, classi] = stats.class_counts[marker, classi] / denom
+        end
+        inclusion_pip[marker] = 1.0 - class_pip[marker, 1]
+        mean_delta[marker] = sum(classi * stats.class_counts[marker, classi] for classi in 1:nclasses) / denom
+    end
+
+    return (draws=stats.draws,
+            effect_mean=effect_mean,
+            effect_sd=effect_sd,
+            inclusion_pip=inclusion_pip,
+            mean_delta=mean_delta,
+            class_pip=class_pip)
+end
+
+function BayesR!(genotypes, ycorr, vare; bayesr_gamma=BAYESR_GAMMA)
     priors = genotypes.annotations === false ? genotypes.π : genotypes.annotations.snp_pi
     BayesR!(genotypes.mArray, genotypes.mRinvArray, genotypes.mpRinvm,
-            ycorr, genotypes.α[1], genotypes.δ[1], vare, genotypes.G.val, priors, BAYESR_GAMMA)
+            ycorr, genotypes.α[1], genotypes.δ[1], vare, genotypes.G.val, priors, bayesr_gamma)
 end
 
-function BayesR_block!(genotypes, ycorr, vare, Rinv=ones(eltype(ycorr), length(ycorr)), independent_blocks=false)
-    BayesR_block!(genotypes, ycorr, vare, Rinv, typemax(Int), 0, independent_blocks)
+function BayesR_block!(genotypes, ycorr, vare, Rinv=ones(eltype(ycorr), length(ycorr)), independent_blocks=false;
+                       bayesr_gamma=BAYESR_GAMMA, inner_outer_stats=false)
+    BayesR_block!(genotypes, ycorr, vare, Rinv, typemax(Int), 0, independent_blocks,
+                  inner_outer_stats, bayesr_gamma)
 end
 
-function BayesR_block!(genotypes, ycorr, vare, Rinv, iter::Integer, burnin::Integer, independent_blocks=false)
+function BayesR_block!(genotypes, ycorr, vare, Rinv, iter::Integer, burnin::Integer,
+                       independent_blocks=false, inner_outer_stats=false,
+                       bayesr_gamma=BAYESR_GAMMA)
     priors = genotypes.annotations === false ? genotypes.π : genotypes.annotations.snp_pi
     BayesR_block!(genotypes.MArray, genotypes.mpRinvm,
                   genotypes.genotypes, genotypes.MpRinvM,
                   ycorr, genotypes.α[1], genotypes.δ[1], vare,
-                  genotypes.G.val, priors, BAYESR_GAMMA, Rinv, iter, burnin, independent_blocks)
+                  genotypes.G.val, priors, bayesr_gamma, Rinv, iter, burnin,
+                  independent_blocks, inner_outer_stats)
 end
 
 function BayesR!(xArray, xRinvArray, xpRinvx,
@@ -105,20 +172,22 @@ function BayesR_block!(XArray, xpRinvx,
                   X, XpRinvX,
                   yCorr,
                   α, δ,
-                  vare, sigmaSq, π, gamma, Rinv, typemax(Int), 0, false)
+                  vare, sigmaSq, π, gamma, Rinv, typemax(Int), 0, false, false)
 end
 
 function BayesR_block!(XArray, xpRinvx,
                        X, XpRinvX,
                        yCorr,
                        α, δ,
-                       vare, sigmaSq, π, gamma, Rinv, iter::Integer, burnin::Integer, independent_blocks=false)
+                       vare, sigmaSq, π, gamma, Rinv, iter::Integer, burnin::Integer,
+                       independent_blocks=false, inner_outer_stats=false)
     if independent_blocks == true
         return BayesR_block_independent!(XArray, xpRinvx,
                                          X, XpRinvX,
                                          yCorr,
                                          α, δ,
-                                         vare, sigmaSq, π, gamma, Rinv, iter, burnin)
+                                         vare, sigmaSq, π, gamma, Rinv, iter, burnin,
+                                         inner_outer_stats)
     end
 
     nclasses = length(gamma)
@@ -180,6 +249,9 @@ function BayesR_block!(XArray, xpRinvx,
                 end
 
                 BLAS.axpy!(oldAlpha - α[locus_j], view(XpRinvX[i], :, j), XpRinvycorr)
+                if inner_outer_stats !== false && iter > burnin
+                    record_bayesr_inner_draw!(inner_outer_stats, α[locus_j], sampled_class, locus_j)
+                end
             end
         end
 
@@ -196,7 +268,8 @@ function BayesR_block_independent!(XArray, xpRinvx,
                                    X, XpRinvX,
                                    yCorr,
                                    α, δ,
-                                   vare, sigmaSq, π, gamma, Rinv, iter::Integer, burnin::Integer)
+                                   vare, sigmaSq, π, gamma, Rinv, iter::Integer, burnin::Integer,
+                                   inner_outer_stats=false)
     nclasses = length(gamma)
     bayesr_validate_priors(π, nclasses, length(α))
     sigmaSq > 0 || error("BayesR sigmaSq must be positive.")
@@ -259,6 +332,9 @@ function BayesR_block_independent!(XArray, xpRinvx,
                 end
 
                 BLAS.axpy!(oldAlpha - α[locus_j], view(XpRinvX[i], :, j), XpRinvycorr)
+                if inner_outer_stats !== false && iter > burnin
+                    record_bayesr_inner_draw!(inner_outer_stats, α[locus_j], sampled_class, locus_j)
+                end
             end
         end
 

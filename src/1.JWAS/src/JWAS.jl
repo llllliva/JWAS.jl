@@ -79,6 +79,15 @@ function validate_fast_block_starts(block_starts::AbstractVector{<:Integer}, nma
     return nothing
 end
 
+function validate_bayesr_gamma(gamma::AbstractVector{<:Real})
+    length(gamma) == 4 || error("BayesR_gamma must contain exactly four class multipliers.")
+    all(isfinite, gamma) || error("BayesR_gamma must contain only finite values.")
+    gamma[1] == 0 || error("BayesR_gamma[1] must be zero for the null class.")
+    all(gamma[2:end] .> 0) || error("Non-null BayesR_gamma values must be positive.")
+    all(diff(gamma[2:end]) .> 0) || error("Non-null BayesR_gamma values must be strictly increasing.")
+    return Float64.(gamma)
+end
+
 """
     runMCMC(model::MME,df::DataFrame;
             #Data
@@ -159,6 +168,8 @@ end
   * If `big_memory`=true, defaulting to `false`, a machine with  lots of memory is assumed which may speed up the analysis.
   * `fast_blocks` enables block marker updates. It can be `false`, `true`, a numeric block size, or a vector of explicit marker block starts such as `[1, 501, 1201]`.
   * `independent_blocks=false` keeps the exact sequential fast-block sweep. Set `independent_blocks=true` only when `fast_blocks != false` and you explicitly want the approximate mode that updates blocks from a sweep-level residual snapshot before reconciling all block changes.
+  * `BayesR_gamma` sets the four BayesR class multipliers in increasing order, including the null class at zero; for example, `[0.0, 0.001, 0.1, 1.0]`. The default is `BAYESR_GAMMA` and custom values currently apply to single-trait BayesR.
+  * `inner_outer_diagnostics=true` records inner fast-block BayesR class draws and adds inner/outer PIP columns to the marker-effects output. It requires `fast_blocks != false` and single-trait, dense BayesR genotypes.
   * `memory_guard` controls the marker-memory precheck before MCMC (`:error`, `:warn`, `:off`; default `:error`).
   * `memory_guard_ratio` sets the allowed fraction of `Sys.total_memory()` for the precheck (default `0.80`).
 """
@@ -191,6 +202,8 @@ function runMCMC(mme::MME,df;
                 double_precision                = false,
                 fast_blocks                     = false,
                 independent_blocks              = false,
+                BayesR_gamma                    = BAYESR_GAMMA,
+                inner_outer_diagnostics          = false,
                 memory_guard                    = :error,
                 memory_guard_ratio::Float64     = 0.80,
                 #MCMC samples (defaut to marker effects and hyperparametes (variance componets))
@@ -205,6 +218,8 @@ function runMCMC(mme::MME,df;
                 estimate_variance               = true,   #this has been moved to build_MME() and set_random()
                 categorical_trait               = false,  #this has been moved to build_model()
                 censored_trait                  = false)  #this has been moved to build_model()
+
+    BayesR_gamma = validate_bayesr_gamma(BayesR_gamma)
 
     #for deprecated JWAS fucntions
     ############################################################################
@@ -273,7 +288,8 @@ function runMCMC(mme::MME,df;
                    printout_model_info,printout_frequency, single_step_analysis,
                    fitting_J_vector,missing_phenotypes,
                    update_priors_frequency,outputEBV,output_heritability,prediction_equation,
-                   seed,double_precision,output_folder,RRM,fast_blocks,independent_blocks)
+                   seed,double_precision,output_folder,RRM,fast_blocks,independent_blocks,
+                   inner_outer_diagnostics,copy(BayesR_gamma))
     ############################################################################
     # Check 1)Arguments; 2)Input Pedigree,Genotype,Phenotypes,
     #       3)output individual IDs; 4)Priors  5)Prediction equation
@@ -290,7 +306,11 @@ function runMCMC(mme::MME,df;
         if single_step_analysis == true
             SSBRrun(mme,df_whole,train_index,big_memory)
         end
-        set_marker_hyperparameters_variances_and_pi(mme)
+        set_marker_hyperparameters_variances_and_pi(mme; bayesr_gamma=BayesR_gamma)
+        if BayesR_gamma != BAYESR_GAMMA && any(Mi.method == "BayesR" for Mi in mme.M) &&
+           (mme.nModels != 1 || RRM != false)
+            error("Custom BayesR_gamma currently supports single-trait BayesR only.")
+        end
     end
     ############################################################################
     #fast blocks #now only work for one geno
@@ -317,6 +337,18 @@ function runMCMC(mme::MME,df;
             mme.MCMCinfo.chain_length = Int(floor(chain_length/(mme.MCMCinfo.fast_blocks[2]-mme.MCMCinfo.fast_blocks[1]))) #number of outer loop
             println("BLOCK SIZE: $block_size")
             flush(stdout)
+        end
+    end
+    if inner_outer_diagnostics == true
+        mme.MCMCinfo.fast_blocks != false ||
+            error("inner_outer_diagnostics=true requires fast_blocks != false.")
+        mme.MCMCinfo.burnin < mme.MCMCinfo.chain_length ||
+            error("inner_outer_diagnostics=true requires burnin ($(mme.MCMCinfo.burnin)) to be smaller than the fast-block outer chain length ($(mme.MCMCinfo.chain_length)).")
+        mme.M != 0 || error("inner_outer_diagnostics=true requires a BayesR genotype term.")
+        for Mi in mme.M
+            Mi.method == "BayesR" || error("inner_outer_diagnostics=true currently supports BayesR only.")
+            Mi.ntraits == 1 || error("inner_outer_diagnostics=true currently supports single-trait BayesR only.")
+            Mi.storage_mode == :dense || error("inner_outer_diagnostics=true currently supports dense BayesR genotypes only.")
         end
     end
     ############################################################################
@@ -594,6 +626,8 @@ function getMCMCinfo(mme)
     @printf("%-30s %20d\n","printout_frequency",MCMCinfo.printout_frequency)
     @printf("%-30s %20d\n","output_samples_frequency",MCMCinfo.output_samples_frequency)
     @printf("%-30s %20s\n","output_marker_effect_samples",MCMCinfo.output_marker_effect_samples ? "true" : "false")
+    @printf("%-30s %20s\n","inner_outer_diagnostics",MCMCinfo.inner_outer_diagnostics ? "true" : "false")
+    @printf("%-30s %20s\n","BayesR_gamma",string(MCMCinfo.bayesr_gamma))
     # @printf("%-30s %20s\n","constraint",MCMCinfo.constraint ? "true" : "false")
     @printf("%-30s %19s\n","constraint on residual variance",mme.R.constraint ? "true" : "false")
     if mme.M != 0

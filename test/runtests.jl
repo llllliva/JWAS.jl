@@ -96,6 +96,10 @@ println()
             include(joinpath(@__DIR__, "unit", "test_annotated_bayesr.jl"))
         end
 
+        @testset "BayesR Gamma and Inner/Outer Diagnostics" begin
+            include(joinpath(@__DIR__, "unit", "test_bayesr_gamma_innerouter.jl"))
+        end
+
         @testset "set_random (Random Effects)" begin
             include(joinpath(@__DIR__, "unit", "test_set_random.jl"))
         end

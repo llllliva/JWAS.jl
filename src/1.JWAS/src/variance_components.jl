@@ -166,7 +166,7 @@ end
 ########################################################################
 # Marker Effects Variance
 ########################################################################
-function sample_marker_effect_variance(Mi)
+function sample_marker_effect_variance(Mi; bayesr_gamma=BAYESR_GAMMA)
     if Mi.method == "BayesL"
         invweights = 1 ./ Mi.gammaArray
     elseif Mi.method == "GBLUP"
@@ -182,7 +182,7 @@ function sample_marker_effect_variance(Mi)
                 sampleGammaArray!(Mi.gammaArray,Mi.α,Mi.G.val) # MH sampler of gammaArray (Appendix C in paper)
             end
         elseif Mi.method == "BayesR"
-            ssq, nnz = bayesr_sigma_sufficient_statistics(Mi.α[1], Mi.δ[1], BAYESR_GAMMA)
+            ssq, nnz = bayesr_sigma_sufficient_statistics(Mi.α[1], Mi.δ[1], bayesr_gamma)
             Mi.G.val = (ssq + Mi.G.df * Mi.G.scale) / rand(Chisq(nnz + Mi.G.df))
         elseif Mi.method == "BayesB"
             for j=1:Mi.nMarkers

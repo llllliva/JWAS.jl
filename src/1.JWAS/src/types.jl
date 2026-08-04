@@ -154,6 +154,9 @@ mutable struct Genotypes
   annotation_start_pi
   annotations
   multi_trait_sampler::Symbol
+  innerOuterStats
+  meanClassVariance
+  meanClassVariance2
 
   Genotypes(a1,a2,a3,a4,a5,a6,a7,a8,a9)=new(false,false,
                                          a1,a2,a3,a4,a5,a6,a7,a8,a4,false,
@@ -162,7 +165,7 @@ mutable struct Genotypes
                                          false,false,false,false,false,false,false,false,false,
                                          false,false,false,false,
                                          false,false,false,false,false,false,false,false,false,false,
-                                         false,:dense,false,a9,false,false,:I)
+                                         false,:dense,false,a9,false,false,:I,false,false,false)
 end
 
 mutable struct MarkerAnnotations
@@ -247,6 +250,8 @@ mutable struct MCMCinfo
     RRM
     fast_blocks
     independent_blocks
+    inner_outer_diagnostics
+    bayesr_gamma
 end
 ################################################################################
 #the class MME is shown below with members for models, mixed model equations...

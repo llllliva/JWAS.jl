@@ -350,7 +350,7 @@ end
 ################################################################################
 #Set Marker Effcets Hyperparameters: Variances and Pi
 ################################################################################
-function set_marker_hyperparameters_variances_and_pi(mme::MME)
+function set_marker_hyperparameters_variances_and_pi(mme::MME; bayesr_gamma=BAYESR_GAMMA)
     if mme.M != 0
         for Mi in mme.M
             #(1) Pi in multi-trait analysis
@@ -378,9 +378,9 @@ function set_marker_hyperparameters_variances_and_pi(mme::MME)
             if Mi.G.val == false
                 if Mi.method!="GBLUP"
                     if Mi.method in ["BayesC", "BayesR"] && Mi.annotations !== false && Mi.ntraits == 2
-                        genetic2marker(Mi, Mi.annotations.snp_pi)
+                        genetic2marker(Mi, Mi.annotations.snp_pi; bayesr_gamma=bayesr_gamma)
                     else
-                        genetic2marker(Mi,Mi.π)
+                        genetic2marker(Mi,Mi.π; bayesr_gamma=bayesr_gamma)
                     end
                     println()
                     if mme.nModels != 1 || mme.MCMCinfo.RRM != false
@@ -423,7 +423,7 @@ function set_marker_hyperparameters_variances_and_pi(mme::MME)
     end
 end
 
-function genetic2marker(M::Genotypes,Pi::Dict)
+function genetic2marker(M::Genotypes,Pi::Dict; bayesr_gamma=BAYESR_GAMMA)
   ntraits = size(M.genetic_variance.val,1)
   denom   = zeros(ntraits,ntraits)
   for i in 1:ntraits
@@ -437,7 +437,7 @@ function genetic2marker(M::Genotypes,Pi::Dict)
   M.G.val = M.genetic_variance.val ./ denom
 end
 
-function genetic2marker(M::Genotypes, snp_pi::AbstractMatrix{<:Real})
+function genetic2marker(M::Genotypes, snp_pi::AbstractMatrix{<:Real}; bayesr_gamma=BAYESR_GAMMA)
     if M.method == "BayesC" && M.ntraits == 2
         size(snp_pi, 1) == M.nMarkers || error("Annotated multi-trait BayesC snp_pi row count must match nMarkers.")
         size(snp_pi, 2) == 4 || error("Annotated multi-trait BayesC snp_pi must have 4 columns for states 00, 10, 01, 11.")
@@ -461,8 +461,8 @@ function genetic2marker(M::Genotypes, snp_pi::AbstractMatrix{<:Real})
         denom = zeros(Float64, 2, 2)
 
         for (state_idx, state) in enumerate(states)
-            scale1 = sqrt(BAYESR_GAMMA[state[1]])
-            scale2 = sqrt(BAYESR_GAMMA[state[2]])
+            scale1 = sqrt(bayesr_gamma[state[1]])
+            scale2 = sqrt(bayesr_gamma[state[2]])
             probs = Float64.(snp_pi[:, state_idx])
             denom[1, 1] += sum(twopq .* probs .* scale1^2)
             denom[2, 2] += sum(twopq .* probs .* scale2^2)
@@ -477,14 +477,14 @@ function genetic2marker(M::Genotypes, snp_pi::AbstractMatrix{<:Real})
     error("Matrix-valued Pi is supported here only for annotated 2-trait BayesC/BayesR.")
 end
 
-function genetic2marker(M::Genotypes,π::Float64)
+function genetic2marker(M::Genotypes,π::Float64; bayesr_gamma=BAYESR_GAMMA)
     M.G.val = M.genetic_variance.val/((1-π)*M.sum2pq)
 end
 
-function genetic2marker(M::Genotypes, π::AbstractVector{<:Real})
+function genetic2marker(M::Genotypes, π::AbstractVector{<:Real}; bayesr_gamma=BAYESR_GAMMA)
     if M.method == "BayesR"
-        length(π) == length(BAYESR_GAMMA) || error("BayesR Pi must have length 4.")
-        denom = M.sum2pq * sum(BAYESR_GAMMA .* π)
+        length(π) == length(bayesr_gamma) || error("BayesR Pi must have length $(length(bayesr_gamma)).")
+        denom = M.sum2pq * sum(bayesr_gamma .* π)
         denom > 0 || error("BayesR implied variance denominator must be positive.")
         M.G.val = M.genetic_variance.val / denom
         return nothing

@@ -157,8 +157,30 @@ function output_result(mme,output_folder,
               marker_effects_output[!, :Class3_Frequency] = class3
               marker_effects_output[!, :Class4_Frequency] = class4
               marker_effects_output[!, :MediumLarge_Frequency] = class3 .+ class4
+              if Mi.innerOuterStats !== false
+                  inner_outer = summarize_bayesr_inner_outer(Mi.innerOuterStats)
+                  marker_effects_output[!, :InnerOuter_Samples] = inner_outer.draws
+                  marker_effects_output[!, :InnerOuter_Estimate] = inner_outer.effect_mean
+                  marker_effects_output[!, :InnerOuter_SD] = inner_outer.effect_sd
+                  marker_effects_output[!, :InnerOuter_Model_Frequency] = inner_outer.inclusion_pip
+                  marker_effects_output[!, :InnerOuter_Mean_Delta] = inner_outer.mean_delta
+                  for classi in axes(inner_outer.class_pip, 2)
+                      marker_effects_output[!, Symbol("InnerOuter_Class", classi, "_PIP")] =
+                          inner_outer.class_pip[:, classi]
+                  end
+              end
           end
           output["marker effects "*Mi.name] = marker_effects_output
+          if Mi.method == "BayesR" && Mi.ntraits == 1 && Mi.meanClassVariance !== false
+              gamma = mme.MCMCinfo.bayesr_gamma
+              class_sd = sqrt.(abs.(Mi.meanClassVariance2 .- Mi.meanClassVariance .^ 2))
+              output["BayesR class variances "*Mi.name] = DataFrame(
+                  Class=collect(1:length(gamma)),
+                  Gamma=gamma,
+                  Estimate=Mi.meanClassVariance,
+                  SD=class_sd,
+              )
+          end
           #output["marker effects variance "*Mi.name] = matrix2dataframe(string.(mme.lhsVec),Mi.meanVara,Mi.meanVara2)
           if Mi.estimatePi == true
               output["pi_"*Mi.name] = pi2dataframe(Mi, Mi.mean_pi, Mi.mean_pi2)
@@ -364,6 +386,9 @@ function output_MCMC_samples_setup(mme,nIter,output_samples_frequency,file_name=
             end
         end
         push!(outvar,"marker_effects_variances"*"_"*Mi.name)
+        if Mi.method == "BayesR" && Mi.ntraits == 1
+            push!(outvar,"bayesr_class_variances"*"_"*Mi.name)
+        end
         push!(outvar,"pi"*"_"*Mi.name)
     end
  end
@@ -442,6 +467,10 @@ function output_MCMC_samples_setup(mme,nIter,output_samples_frequency,file_name=
                 writedlm(outfile["marker_effects_"*Mi.name*"_"*traiti],transubstrarr(Mi.markerID),',')
             end
         end
+        if Mi.method == "BayesR" && Mi.ntraits == 1
+            writedlm(outfile["bayesr_class_variances"*"_"*Mi.name],
+                     transubstrarr(["Class$(i)" for i in 1:length(mme.MCMCinfo.bayesr_gamma)]), ',')
+        end
     end
   end
 
@@ -501,7 +530,7 @@ function output_MCMC_samples(mme,vRes,G0,
              end
          end
           
-         if Mi.G.val != false
+          if Mi.G.val != false
               if mme.nModels == 1
                   writedlm(outfile["marker_effects_variances"*"_"*Mi.name],Mi.G.val',',')
               else
@@ -511,6 +540,10 @@ function output_MCMC_samples(mme,vRes,G0,
                       writedlm(outfile["marker_effects_variances"*"_"*Mi.name],Mi.G.val,',')
                   end
               end
+          end
+          if Mi.method == "BayesR" && Mi.ntraits == 1
+              class_variance = mme.MCMCinfo.bayesr_gamma .* Float64(Mi.G.val)
+              writedlm(outfile["bayesr_class_variances"*"_"*Mi.name],class_variance',',')
           end
           pi_output = collapse_pi_for_output(Mi, Mi.π)
           writedlm(outfile["pi"*"_"*Mi.name],pi_output,',')
@@ -628,6 +661,11 @@ function output_posterior_mean_variance(mme,nsamples)
             if Mi.method != "BayesB"
                 Mi.meanVara += (Mi.G.val - Mi.meanVara)/nsamples
                 Mi.meanVara2 += (Mi.G.val .^2 - Mi.meanVara2)/nsamples
+                if Mi.method == "BayesR" && Mi.ntraits == 1 && Mi.meanClassVariance !== false
+                    class_variance = mme.MCMCinfo.bayesr_gamma .* Float64(Mi.G.val)
+                    Mi.meanClassVariance += (class_variance - Mi.meanClassVariance)/nsamples
+                    Mi.meanClassVariance2 += (class_variance .^ 2 - Mi.meanClassVariance2)/nsamples
+                end
             end
             if Mi.G.estimate_scale == true
                 Mi.meanScaleVara += (Mi.G.scale - Mi.meanScaleVara)/nsamples
