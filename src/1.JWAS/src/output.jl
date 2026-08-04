@@ -385,6 +385,12 @@ function output_MCMC_samples_setup(mme,nIter,output_samples_frequency,file_name=
                 push!(outvar,"marker_effects_"*Mi.name*"_"*traiti)
             end
         end
+        if Mi.method == "BayesR"
+            geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
+            for traiti in geno_names
+                push!(outvar,"delta_"*Mi.name*"_"*traiti)
+            end
+        end
         push!(outvar,"marker_effects_variances"*"_"*Mi.name)
         if Mi.method == "BayesR" && Mi.ntraits == 1
             push!(outvar,"bayesr_class_variances"*"_"*Mi.name)
@@ -467,6 +473,12 @@ function output_MCMC_samples_setup(mme,nIter,output_samples_frequency,file_name=
                 writedlm(outfile["marker_effects_"*Mi.name*"_"*traiti],transubstrarr(Mi.markerID),',')
             end
         end
+        if Mi.method == "BayesR"
+            geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
+            for traiti in geno_names
+                writedlm(outfile["delta_"*Mi.name*"_"*traiti],transubstrarr(Mi.markerID),',')
+            end
+        end
         if Mi.method == "BayesR" && Mi.ntraits == 1
             writedlm(outfile["bayesr_class_variances"*"_"*Mi.name],
                      transubstrarr(["Class$(i)" for i in 1:length(mme.MCMCinfo.bayesr_gamma)]), ',')
@@ -527,6 +539,13 @@ function output_MCMC_samples(mme,vRes,G0,
              geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
              for traiti in 1:ntraits_geno
                 writedlm(outfile["marker_effects_"*Mi.name*"_"*geno_names[traiti]],Mi.α[traiti]',',')
+             end
+         end
+         if Mi.method == "BayesR"
+             ntraits_geno = mme.MCMCinfo.RRM == false ? Mi.ntraits : length(mme.lhsVec)
+             geno_names = mme.MCMCinfo.RRM == false ? Mi.trait_names : string.(mme.lhsVec)
+             for traiti in 1:ntraits_geno
+                 writedlm(outfile["delta_"*Mi.name*"_"*geno_names[traiti]],Mi.δ[traiti]',',')
              end
          end
           

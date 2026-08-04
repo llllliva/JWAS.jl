@@ -135,8 +135,10 @@ end
 
 * Markov chain Monte Carlo
     * The first `burnin` iterations are discarded at the beginning of a MCMC chain of length `chain_length`.
-    * Save MCMC samples every `output_samples_frequency` iterations, defaulting to `chain_length/1000`, to a folder `output_folder`,
+      * Save MCMC samples every `output_samples_frequency` iterations, defaulting to `chain_length/1000`, to a folder `output_folder`,
       defaulting to `results`. MCMC samples for hyperparametes (variance componets) and marker effects are saved by default.
+      For BayesR, the integer class assignments are also saved in `MCMC_samples_delta_<genotype>_<trait>.txt`;
+      class `1` is the null class and classes `2`--`4` are the non-null mixture classes.
       Set `output_marker_effect_samples=false` to skip writing the large marker-effect sample files while keeping final
       marker-effect summaries and smaller MCMC sample files such as marker variances and pi.
       MCMC samples for location parametes can be saved using function `output_MCMC_samples()`. Note that saving MCMC samples too

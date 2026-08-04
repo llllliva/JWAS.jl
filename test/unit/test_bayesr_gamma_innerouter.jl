@@ -61,6 +61,9 @@ using JWAS.Datasets
             @test all(class_variances.Estimate[2:end] .>= 0.0)
             @test isfile("results/BayesR_class_variances_bayesr_gamma_innerouter_geno.txt")
             @test isfile("results/MCMC_samples_bayesr_class_variances_bayesr_gamma_innerouter_geno.txt")
+            @test isfile("results/MCMC_samples_delta_bayesr_gamma_innerouter_geno_y1.txt")
+            delta_trace = readlines("results/MCMC_samples_delta_bayesr_gamma_innerouter_geno_y1.txt")
+            @test length(delta_trace) == 11  # header plus 10 retained outer samples
             @test isfile("results/marker_effects_bayesr_gamma_innerouter_geno.txt")
         end
     end
