@@ -369,6 +369,47 @@ using Random
         @test upper == [0.0, Inf, Inf, 0.0]
     end
 
+    @testset "fixed probit intercept updates residual consistently" begin
+        coeffs = Float64[2.5]
+        X = ones(Float64, 3, 1)
+        latent_residual = Float64[-1.0, 0.0, 1.0]
+
+        JWAS.gibbs_update_binary_probit_annotation_coefficients!(
+            coeffs,
+            X,
+            latent_residual,
+            1.0;
+            update_intercept=false,
+            fixed_intercept=0.0,
+        )
+
+        @test coeffs[1] == 0.0
+        @test latent_residual == Float64[1.5, 2.5, 3.5]
+    end
+
+    @testset "single-trait BayesR Step 1 is anchored to starting Pi" begin
+        annotations = zeros(Float64, 5, 0)
+        start_pi = Float64[0.995, 0.004, 0.0009, 0.0001]
+        geno = get_genotypes(
+            genofile, 1.0;
+            method="BayesR",
+            annotations=annotations,
+            Pi=start_pi,
+            separator=',',
+            quality_control=false,
+        )
+        geno.δ = [Int[1, 2, 3, 4, 2]]
+
+        Random.seed!(20260806)
+        JWAS.update_marker_annotation_priors!(geno)
+
+        expected_offset = quantile(Normal(), 1.0 - start_pi[1])
+        @test geno.annotations.coefficients[1, 1] == 0.0
+        @test all(geno.annotations.mu[:, 1] .≈ expected_offset)
+        @test all(geno.annotations.snp_pi[:, 1] .≈ start_pi[1])
+        @test all(abs.(sum(geno.annotations.snp_pi, dims=2) .- 1.0) .< 1e-8)
+    end
+
     @testset "BayesR annotation prior refresh builds 4-class snp_pi" begin
         annotations = rand(Float64, 5, 2)
         geno = get_genotypes(

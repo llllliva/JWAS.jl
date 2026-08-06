@@ -79,7 +79,14 @@ function gibbs_update_bayesc_binary_annotation_coefficients!(ann)
 end
 
 """
-    gibbs_update_binary_probit_annotation_coefficients!(coeffs, X, latent_residual, coef_prior_var)
+    gibbs_update_binary_probit_annotation_coefficients!(
+        coeffs,
+        X,
+        latent_residual,
+        coef_prior_var;
+        update_intercept=true,
+        fixed_intercept=0.0,
+    )
 
 Coordinate Gibbs update for one binary probit annotation submodel.
 
@@ -98,15 +105,23 @@ Then each coefficient is updated by a standard scalar Gibbs step:
 function gibbs_update_binary_probit_annotation_coefficients!(coeffs::AbstractVector,
                                                              X::AbstractMatrix,
                                                              latent_residual::AbstractVector,
-                                                             coef_prior_var::Real)
+                                                             coef_prior_var::Real;
+                                                             update_intercept::Bool=true,
+                                                             fixed_intercept::Real=0.0)
     nobs = size(X, 1)
 
-    old_sample = coeffs[1]
-    rhs = sum(latent_residual) + nobs * old_sample
-    inv_lhs = 1.0 / nobs
-    ahat = inv_lhs * rhs
-    coeffs[1] = randn() * sqrt(inv_lhs) + ahat
-    latent_residual .+= old_sample - coeffs[1]
+    if update_intercept
+        old_sample = coeffs[1]
+        rhs = sum(latent_residual) + nobs * old_sample
+        inv_lhs = 1.0 / nobs
+        ahat = inv_lhs * rhs
+        coeffs[1] = randn() * sqrt(inv_lhs) + ahat
+        latent_residual .+= old_sample - coeffs[1]
+    else
+        old_sample = coeffs[1]
+        coeffs[1] = Float64(fixed_intercept)
+        latent_residual .+= old_sample - coeffs[1]
+    end
 
     if size(X, 2) > 1
         for k in 2:size(X, 2)
@@ -258,9 +273,19 @@ the 4-class per-marker prior as
 
 This helper updates one binary probit submodel that contributes to `p_step`.
 """
-function sample_nested_annotation_probit_step!(ann, step::Integer, response::AbstractVector{<:Integer}, active::AbstractVector{<:Integer})
+function sample_nested_annotation_probit_step!(ann,
+                                               step::Integer,
+                                               response::AbstractVector{<:Integer},
+                                               active::AbstractVector{<:Integer};
+                                               offset::Real=0.0,
+                                               update_intercept::Bool=true,
+                                               fixed_intercept::Real=0.0)
     coeffs = view(ann.coefficients, :, step)
-    ann.mu[:, step] .= ann.design_matrix * coeffs
+    if !update_intercept
+        coeffs[1] = Float64(fixed_intercept)
+    end
+
+    ann.mu[:, step] .= Float64(offset) .+ ann.design_matrix * coeffs
     ann.lower_bound[:, step] .= -Inf
     ann.upper_bound[:, step] .= Inf
     isempty(active) && return nothing
@@ -282,13 +307,20 @@ function sample_nested_annotation_probit_step!(ann, step::Integer, response::Abs
     )
 
     latent_residual = liability_active .- mu_active
-    gibbs_update_binary_probit_annotation_coefficients!(coeffs, X, latent_residual, ann.variance[step])
+    gibbs_update_binary_probit_annotation_coefficients!(
+        coeffs,
+        X,
+        latent_residual,
+        ann.variance[step];
+        update_intercept=update_intercept,
+        fixed_intercept=fixed_intercept,
+    )
 
     if size(X, 2) > 1
         sample_annotation_effect_variance!(ann.variance, step, coeffs)
     end
 
-    ann.mu[:, step] .= ann.design_matrix * coeffs
+    ann.mu[:, step] .= Float64(offset) .+ ann.design_matrix * coeffs
     return nothing
 end
 
@@ -417,8 +449,32 @@ function update_marker_annotation_priors!(Mi)
     if Mi.method == "BayesR"
         delta = Int.(Mi.δ[1])
         responses, active_sets = bayesr_nested_step_indicators(delta)
+        start_pi = bayesr_default_pi(Mi.annotation_start_pi)
+        start_p1, _, _ = bayesr_annotation_probabilities(start_pi)
+        step1_offset = quantile(
+            Normal(),
+            clamp(start_p1, eps(Float64), 1.0 - eps(Float64)),
+        )
+
         for step in 1:ann.nsteps
-            sample_nested_annotation_probit_step!(ann, step, responses[step], active_sets[step])
+            if step == 1
+                sample_nested_annotation_probit_step!(
+                    ann,
+                    step,
+                    responses[step],
+                    active_sets[step];
+                    offset=step1_offset,
+                    update_intercept=false,
+                    fixed_intercept=0.0,
+                )
+            else
+                sample_nested_annotation_probit_step!(
+                    ann,
+                    step,
+                    responses[step],
+                    active_sets[step],
+                )
+            end
         end
         rebuild_bayesr_nested_priors!(ann)
         mean_pi = vec(mean(ann.snp_pi, dims=1))
