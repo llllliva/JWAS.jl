@@ -63,19 +63,36 @@ The sequential structure is in the annotation model that generates `pi_j`, not i
 
 ## Initialization
 
-Annotated BayesR starts from the same default prior as standard BayesR:
+Annotated BayesR starts from the user-supplied BayesR `Pi`, or the same default
+prior as standard BayesR when `Pi` is omitted:
 
 ```math
 \pi = (0.95, 0.03, 0.015, 0.005)
 ```
 
-JWAS expands this to a constant marker-level prior matrix `snp_pi`, so every
-marker starts from the same four-class BayesR prior.
+For a starting mixture `(pi_1, pi_2, pi_3, pi_4)`, JWAS initializes the nested
+probabilities as:
 
-Annotation coefficients start at zero and JWAS does not fit the annotation model
-before the first phenotype-informed marker sweep. The first BayesR sweep uses the
-supplied starting `snp_pi` directly, and only then does the annotation model
-update the conditional class probabilities.
+```math
+p_1 = \pi_2 + \pi_3 + \pi_4
+```
+
+```math
+p_2 = \frac{\pi_3 + \pi_4}{\pi_2 + \pi_3 + \pi_4}
+```
+
+```math
+p_3 = \frac{\pi_4}{\pi_3 + \pi_4}
+```
+
+All annotation slopes start at zero. The three probit intercepts start at
+`Phi^{-1}(p_1)`, `Phi^{-1}(p_2)`, and `Phi^{-1}(p_3)`, respectively. JWAS then
+recomputes the latent means and marker-level `snp_pi`, and checks that their mean
+reconstructs the requested starting mixture.
+
+This gives the first phenotype-informed marker sweep a single internally
+consistent prior state. After initialization, all three intercepts and all
+annotation slopes remain free to update through the existing Gibbs sampler.
 
 ## Sampler Order
 

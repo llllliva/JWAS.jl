@@ -34,10 +34,10 @@ using Random
         return err
     end
 
-    @testset "accepts dense single-trait annotations with Jian-style startup" begin
+    @testset "accepts dense single-trait annotations with Pi-consistent startup" begin
         annotations = rand(Float64, 5, 2)
-        start_pi = Float64[0.95, 0.03, 0.015, 0.005]
-        geno = get_genotypes(
+        start_pi = Float64[0.995, 0.004, 0.0009, 0.0001]
+        global annotated_bayesr_startup = get_genotypes(
             genofile, 1.0;
             method="BayesR",
             annotations=annotations,
@@ -45,15 +45,59 @@ using Random
             separator=',',
             quality_control=false,
         )
+        model = build_model("y1 = intercept + annotated_bayesr_startup", 1.0)
+        geno = model.M[1]
 
         @test geno.method == "BayesR"
         @test geno.annotations !== false
         @test size(geno.annotations.coefficients) == (size(annotations, 2) + 1, 3)
         @test size(geno.annotations.snp_pi) == (geno.nMarkers, 4)
         @test geno.annotations.design_matrix[:, 1] == ones(size(annotations, 1))
-        @test all(geno.annotations.coefficients .== 0.0)
-        @test all(geno.annotations.mu .== 0.0)
-        @test geno.annotations.snp_pi == repeat(reshape(start_pi, 1, :), geno.nMarkers, 1)
+        @test geno.annotation_start_pi == start_pi
+        @test geno.π == start_pi
+        @test geno.annotations.coefficients[1, :] ≈ [
+            quantile(Normal(), 0.005),
+            quantile(Normal(), 0.20),
+            quantile(Normal(), 0.10),
+        ] atol=1e-12
+        @test all(geno.annotations.coefficients[2:end, :] .== 0.0)
+        @test geno.annotations.mu ≈ geno.annotations.design_matrix * geno.annotations.coefficients atol=1e-12
+        @test vec(mean(geno.annotations.snp_pi, dims=1)) ≈ start_pi atol=1e-8
+        @test all(geno.annotations.snp_pi .≈ repeat(reshape(start_pi, 1, :), geno.nMarkers, 1))
+    end
+
+    @testset "single-trait BayesR annotation initialization validates and rebuilds Pi" begin
+        design_matrix = [
+            1.0 0.0 1.0
+            1.0 1.0 0.0
+            1.0 0.5 0.5
+        ]
+        start_pi = Float64[0.995, 0.004, 0.0009, 0.0001]
+        ann = JWAS.MarkerAnnotations(
+            design_matrix;
+            nsteps=3,
+            nclasses=4,
+            coefficients=fill(9.0, 3, 3),
+            snp_pi=zeros(Float64, 3, 4),
+        )
+
+        JWAS.initialize_bayesr_single_trait_annotation_coefficients!(ann, start_pi)
+
+        @test ann.coefficients[1, :] ≈ [
+            quantile(Normal(), 0.005),
+            quantile(Normal(), 0.20),
+            quantile(Normal(), 0.10),
+        ] atol=1e-12
+        @test all(ann.coefficients[2:end, :] .== 0.0)
+        @test ann.mu ≈ ann.design_matrix * ann.coefficients atol=1e-12
+        @test all(ann.snp_pi .≈ repeat(reshape(start_pi, 1, :), 3, 1))
+
+        @test_throws ErrorException JWAS.initialize_bayesr_single_trait_annotation_coefficients!(ann, [0.9, 0.1, 0.0])
+        @test_throws ErrorException JWAS.initialize_bayesr_single_trait_annotation_coefficients!(ann, [0.9, 0.2, -0.1, 0.0])
+        @test_throws ErrorException JWAS.initialize_bayesr_single_trait_annotation_coefficients!(ann, [0.9, 0.05, 0.03, 0.01])
+        @test_throws ErrorException JWAS.initialize_bayesr_single_trait_annotation_coefficients!(ann, [1.0, 0.0, 0.0, 0.0])
+        @test_throws ErrorException JWAS.initialize_bayesr_single_trait_annotation_coefficients!(ann, [0.9, 0.1, 0.0, 0.0])
+        @test_throws ErrorException JWAS.initialize_bayesr_single_trait_annotation_coefficients!(ann, [0.9, 0.0, 0.1, 0.0])
     end
 
     @testset "rejects unsupported BayesR annotation modes" begin
