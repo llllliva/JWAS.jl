@@ -97,6 +97,57 @@ end
 #                                PRIVATE FUNCTIONS
 # ===============================================================================================================
 
+function annotation_enrichment_dataframe(Mi)
+    stats = Mi.annotations.enrichment_stats
+    stats === false && return DataFrame()
+    result = DataFrame(
+        Trait=String[],
+        Annotation=String[],
+        SNP_Count=Int[],
+        SNP_Fraction=Float64[],
+        Heritability_Estimate=Float64[],
+        Heritability_SD=Float64[],
+        H2_Proportion_Estimate=Float64[],
+        H2_Proportion_SD=Float64[],
+        Enrichment_Estimate=Float64[],
+        Enrichment_SD=Float64[],
+        Pr_Enrichment_GT_1=Float64[],
+        Posterior_Iterations=Int[],
+        Posterior_Samples=Int[],
+    )
+
+    for trait in 1:Mi.ntraits, annotation in eachindex(stats.marker_counts)
+        n = stats.valid_draws[trait, annotation]
+        if n == 0
+            h2 = h2_sd = proportion = proportion_sd = enrichment = enrichment_sd = probability_gt_one = NaN
+        else
+            h2 = stats.mean_heritability[trait, annotation]
+            h2_sd = sqrt(max(0.0, stats.mean_heritability2[trait, annotation] - h2^2))
+            proportion = stats.mean_proportion[trait, annotation]
+            proportion_sd = sqrt(max(0.0, stats.mean_proportion2[trait, annotation] - proportion^2))
+            enrichment = stats.mean_enrichment[trait, annotation]
+            enrichment_sd = sqrt(max(0.0, stats.mean_enrichment2[trait, annotation] - enrichment^2))
+            probability_gt_one = stats.enrichment_gt_one[trait, annotation] / n
+        end
+        push!(result, (
+            string(Mi.trait_names[trait]),
+            "Annotation_$annotation",
+            stats.marker_counts[annotation],
+            stats.marker_fractions[annotation],
+            h2,
+            h2_sd,
+            proportion,
+            proportion_sd,
+            enrichment,
+            enrichment_sd,
+            probability_gt_one,
+            stats.attempted_draws,
+            n,
+        ))
+    end
+    return result
+end
+
 ################################################################################
 #*******************************************************************************
 #2. Return Output Results (Dictionary)
@@ -223,6 +274,10 @@ function output_result(mme,output_folder,
                       Estimate=vec(permutedims(ann.mean_coefficients, (2, 1))),
                       SD=vec(permutedims(annotation_sd, (2, 1))),
                   )
+              end
+              if ann.enrichment_stats !== false
+                  output["annotation heritability enrichment "*Mi.name] =
+                      annotation_enrichment_dataframe(Mi)
               end
           end
       end

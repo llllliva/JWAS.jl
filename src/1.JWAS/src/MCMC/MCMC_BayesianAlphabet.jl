@@ -96,6 +96,10 @@ function MCMC_BayesianAlphabet(mme,df)
             Mi.meanVara2          = zero(mme.R.val)  #variable to save variance for marker effect
             Mi.meanScaleVara      = zero(mme.R.val) #variable to save Scale parameter for prior of marker effect variance
             Mi.meanScaleVara2     = zero(mme.R.val)  #variable to save Scale parameter for prior of marker effect variance
+            if has_marker_annotations(Mi)
+                Mi.annotations.enrichment_stats = mme.MCMCinfo.output_annotation_enrichment ?
+                    initialize_annotation_enrichment(Mi) : false
+            end
             if is_multi_trait
                 # if is_mega_trait
                 if Mi.G.constraint==true
@@ -400,6 +404,11 @@ function MCMC_BayesianAlphabet(mme,df)
             end
             if mme.MCMCinfo.double_precision == false
                 mme.R.val = Float32.(mme.R.val)
+            end
+        end
+        if iter > burnin && mme.MCMCinfo.output_annotation_enrichment && mme.M != 0
+            for Mi in mme.M
+                has_marker_annotations(Mi) && update_annotation_enrichment!(Mi, mme.R.val)
             end
         end
         ########################################################################

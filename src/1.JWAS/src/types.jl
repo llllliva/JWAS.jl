@@ -183,6 +183,7 @@ mutable struct MarkerAnnotations
     nsteps
     nclasses
     snp_pi
+    enrichment_stats
 
     function MarkerAnnotations(design_matrix::AbstractMatrix;
                                variance::Real=1.0,
@@ -215,8 +216,24 @@ mutable struct MarkerAnnotations
             matrix' * matrix,
             nsteps,
             nclasses,
-            class_priors)
+            class_priors,
+            false)
     end
+end
+
+mutable struct AnnotationEnrichmentStats
+    marker_weights::Vector{Float64}
+    marker_counts::Vector{Int}
+    marker_fractions::Vector{Float64}
+    mean_heritability::Matrix{Float64}
+    mean_heritability2::Matrix{Float64}
+    mean_proportion::Matrix{Float64}
+    mean_proportion2::Matrix{Float64}
+    mean_enrichment::Matrix{Float64}
+    mean_enrichment2::Matrix{Float64}
+    valid_draws::Matrix{Int}
+    enrichment_gt_one::Matrix{Int}
+    attempted_draws::Int
 end
 
 # mutable struct DF
@@ -243,6 +260,7 @@ mutable struct MCMCinfo
     update_priors_frequency
     outputEBV
     output_heritability
+    output_annotation_enrichment
     prediction_equation
     seed
     double_precision

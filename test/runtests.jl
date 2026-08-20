@@ -96,6 +96,10 @@ println()
             include(joinpath(@__DIR__, "unit", "test_annotated_bayesr.jl"))
         end
 
+        @testset "Annotation Heritability Enrichment" begin
+            include(joinpath(@__DIR__, "unit", "test_annotation_enrichment.jl"))
+        end
+
         @testset "BayesR Gamma and Inner/Outer Diagnostics" begin
             include(joinpath(@__DIR__, "unit", "test_bayesr_gamma_innerouter.jl"))
         end

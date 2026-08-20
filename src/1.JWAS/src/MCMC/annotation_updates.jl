@@ -2,6 +2,112 @@ function has_marker_annotations(Mi)
     return Mi.annotations !== false
 end
 
+function initialize_annotation_enrichment(Mi)
+    has_marker_annotations(Mi) || error("Annotation enrichment requires marker annotations.")
+    annotation_matrix = @view Mi.annotations.design_matrix[:, 2:end]
+    size(annotation_matrix, 2) > 0 || error("Annotation enrichment requires at least one non-intercept annotation column.")
+    all(x -> x == 0.0 || x == 1.0, annotation_matrix) ||
+        error("Annotation enrichment requires binary 0/1 annotation columns.")
+
+    allele_frequency = vec(Float64.(Mi.alleleFreq))
+    length(allele_frequency) == Mi.nMarkers ||
+        error("Annotation enrichment allele-frequency count must match nMarkers.")
+    size(annotation_matrix, 1) == Mi.nMarkers ||
+        error("Annotation enrichment row count must match nMarkers.")
+
+    marker_counts = Int.(vec(sum(annotation_matrix, dims=1)))
+    all(>(0), marker_counts) || error("Annotation enrichment groups must contain at least one post-QC marker.")
+    marker_fractions = marker_counts ./ Mi.nMarkers
+    marker_weights = 2.0 .* allele_frequency .* (1.0 .- allele_frequency)
+    shape = (Mi.ntraits, size(annotation_matrix, 2))
+
+    return AnnotationEnrichmentStats(
+        marker_weights,
+        marker_counts,
+        marker_fractions,
+        zeros(Float64, shape),
+        zeros(Float64, shape),
+        zeros(Float64, shape),
+        zeros(Float64, shape),
+        zeros(Float64, shape),
+        zeros(Float64, shape),
+        zeros(Int, shape),
+        zeros(Int, shape),
+        0,
+    )
+end
+
+function annotation_residual_variance(vres, trait::Integer)
+    if vres isa Number
+        return Float64(vres)
+    elseif vres isa AbstractVector
+        return Float64(vres[trait])
+    end
+    return Float64(vres[trait, trait])
+end
+
+function update_annotation_enrichment_moments!(stats, trait, heritability, proportion, enrichment)
+    for annotation in eachindex(stats.marker_counts)
+        n = stats.valid_draws[trait, annotation] + 1
+        stats.valid_draws[trait, annotation] = n
+
+        h2 = heritability[annotation]
+        stats.mean_heritability[trait, annotation] +=
+            (h2 - stats.mean_heritability[trait, annotation]) / n
+        stats.mean_heritability2[trait, annotation] +=
+            (h2^2 - stats.mean_heritability2[trait, annotation]) / n
+
+        prop = proportion[annotation]
+        stats.mean_proportion[trait, annotation] +=
+            (prop - stats.mean_proportion[trait, annotation]) / n
+        stats.mean_proportion2[trait, annotation] +=
+            (prop^2 - stats.mean_proportion2[trait, annotation]) / n
+
+        enrich = enrichment[annotation]
+        stats.mean_enrichment[trait, annotation] +=
+            (enrich - stats.mean_enrichment[trait, annotation]) / n
+        stats.mean_enrichment2[trait, annotation] +=
+            (enrich^2 - stats.mean_enrichment2[trait, annotation]) / n
+        stats.enrichment_gt_one[trait, annotation] += enrich > 1.0
+    end
+    return nothing
+end
+
+"""
+    update_annotation_enrichment!(Mi, residual_variance)
+
+Accumulate one marker-additive annotation heritability/enrichment draw from the
+current marker effects. The caller controls the MCMC cadence; the main sampler
+calls this once per post-burn-in iteration (once per outer iteration for
+`fast_blocks`).
+"""
+function update_annotation_enrichment!(Mi, residual_variance)
+    stats = Mi.annotations.enrichment_stats
+    stats === false && return nothing
+    stats.attempted_draws += 1
+    annotation_matrix = @view Mi.annotations.design_matrix[:, 2:end]
+
+    for trait in 1:Mi.ntraits
+        marker_variance = stats.marker_weights .* abs2.(Float64.(Mi.α[trait]))
+        total_marker_variance = sum(marker_variance)
+        residual = annotation_residual_variance(residual_variance, trait)
+        denominator = total_marker_variance + residual
+        if !(isfinite(total_marker_variance) && total_marker_variance > 0.0 &&
+             isfinite(denominator) && denominator > 0.0)
+            continue
+        end
+
+        group_variance = vec(annotation_matrix' * marker_variance)
+        proportion = group_variance ./ total_marker_variance
+        heritability = group_variance ./ denominator
+        enrichment = proportion ./ stats.marker_fractions
+        update_annotation_enrichment_moments!(
+            stats, trait, heritability, proportion, enrichment,
+        )
+    end
+    return nothing
+end
+
 """
     annotation_binary_bounds!(lower, upper, response)
 
