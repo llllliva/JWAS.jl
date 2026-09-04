@@ -172,6 +172,7 @@ end
                   ## others:
                   center=true,starting_value=false,
                   annotations=false,
+                  copy_genotypes=true,
                   storage=:dense)
 * Get marker informtion from a genotype file/matrix. This file needs to be column-wise sorted by marker positions.
 * If `a text file` is provided, the file format should be:
@@ -208,6 +209,11 @@ O3,0,0,2,1,1
   `:I` is the default, `:auto` preserves the existing support-based dispatch, and `:II` forces joint-state updates.
 * `storage=:dense` (default) keeps the existing in-memory dense loading behavior.
   `storage=:stream` loads an opt-in packed backend prepared by `prepare_streaming_genotypes`.
+* `copy_genotypes=true` preserves the historical behavior for matrix input. Set
+  `copy_genotypes=false` only for a dense `Matrix` whose element type already
+  matches `double_precision`; JWAS then adopts and may mutate the caller's matrix
+  during missing-value imputation and centering. File and DataFrame inputs cannot
+  use this option.
 
 """
 function get_genotypes(file::Union{AbstractString,Array{Float64,2},Array{Float32,2},Array{Int64,2}, Array{Int32,2}, Array{Any,2}, DataFrames.DataFrame}, G = false;
@@ -225,12 +231,21 @@ function get_genotypes(file::Union{AbstractString,Array{Float64,2},Array{Float32
                        center = true, starting_value = false,
                        annotations = false,
                        multi_trait_sampler::Symbol = :I,
+                       copy_genotypes::Bool = true,
                        storage::Symbol = :dense)
     if !(multi_trait_sampler in (:auto, :I, :II))
         error("multi_trait_sampler must be one of :auto, :I, or :II.")
     end
     if !(storage in (:dense,:stream))
         error("storage must be :dense or :stream.")
+    end
+
+    matrix_input = file isa Union{Array{Float64,2},Array{Float32,2},Array{Int64,2},Array{Int32,2},Array{Any,2}}
+    if !copy_genotypes && !matrix_input
+        error("copy_genotypes=false is supported only for dense Matrix input.")
+    end
+    if !copy_genotypes && storage != :dense
+        error("copy_genotypes=false requires storage=:dense.")
     end
 
     if storage == :stream
@@ -342,7 +357,14 @@ function get_genotypes(file::Union{AbstractString,Array{Float64,2},Array{Float32
         printstyled("The marker IDs are set to 1,2,...,#markers\n",bold=true)
         obsID     = map(string,string.(1:size(file,1)))
         printstyled("The individual IDs is set to 1,2,...,#observations\n",bold=true)
-        genotypes = map(data_type, convert(Matrix,file))
+        if copy_genotypes
+            genotypes = map(data_type, convert(Matrix,file))
+        else
+            eltype(file) === data_type ||
+                error("copy_genotypes=false requires matrix element type $data_type when double_precision=$double_precision; received $(eltype(file)).")
+            genotypes = file
+            printstyled("JWAS is adopting the supplied genotype matrix without copying it; preprocessing may mutate the caller's matrix.\n", bold=true, color=:yellow)
+        end
     else
         error("The data type is not supported.")
     end

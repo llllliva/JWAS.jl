@@ -1,5 +1,23 @@
 # JWAS.jl
 
+## Opt-in no-copy dense matrix input
+
+This version adds `copy_genotypes=false` to `get_genotypes` for workflows that
+already own a correctly typed dense genotype matrix:
+
+```julia
+genotypes = get_genotypes(selected_float32_matrix;
+                          method="BayesC",
+                          double_precision=false,
+                          quality_control=false,
+                          copy_genotypes=false)
+```
+
+The default remains `copy_genotypes=true`, so existing callers are unchanged.
+No-copy mode requires a concrete matrix whose element type matches the chosen
+precision. JWAS adopts the matrix and may mutate it during imputation or
+centering. File and DataFrame input continue to copy and reject no-copy mode.
+
 [![CI](https://github.com/reworkhow/JWAS.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/reworkhow/JWAS.jl/actions/workflows/CI.yml)
 [![codecov](https://codecov.io/gh/reworkhow/JWAS.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/reworkhow/JWAS.jl)
 [![](https://img.shields.io/badge/docs-latest-blue.svg)](https://reworkhow.github.io/JWAS.jl/latest)
