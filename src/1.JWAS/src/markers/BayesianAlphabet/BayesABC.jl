@@ -21,6 +21,17 @@ end
     return fill(π, nMarkers)
 end
 
+@inline function bayesabc_axpy!(a, x, y)
+    if x isa StridedVector && y isa StridedVector
+        BLAS.axpy!(a, x, y)
+    else
+        @inbounds @simd for i in eachindex(x, y)
+            y[i] += a*x[i]
+        end
+    end
+    return nothing
+end
+
 @inline function bayesabc_update_marker!(x,
                                          yCorr,
                                          α,β,δ,
@@ -45,10 +56,10 @@ end
         δ[j] = 1
         β[j] = gHat + randn()*sqrt(invLhs)
         α[j] = β[j]
-        BLAS.axpy!(oldAlpha-α[j],x,yCorr)
+        bayesabc_axpy!(oldAlpha-α[j],x,yCorr)
     else
         if oldAlpha != 0
-            BLAS.axpy!(oldAlpha,x,yCorr)
+            bayesabc_axpy!(oldAlpha,x,yCorr)
         end
         δ[j] = 0
         β[j] = randn()*sqrt(varEffect_j)

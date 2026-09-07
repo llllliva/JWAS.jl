@@ -57,6 +57,78 @@ using Statistics
     )
 end
 
+
+@testset "Shared dense classes support unphenotyped genotype rows" begin
+    source_matrix = Float32[
+        0 1 2 0
+        1 1 1 2
+        2 0 0 1
+        1 2 1 0
+        0 0 2 1
+        2 1 0 2
+    ]
+    source = get_genotypes(
+        source_matrix,
+        1.0;
+        method="BayesC",
+        quality_control=false,
+        center=true,
+        copy_genotypes=false,
+        Pi=0.8,
+    )
+    memberships = Bool[
+        1 0
+        1 1
+        0 1
+        0 0
+    ]
+    classes = get_shared_genotype_classes(
+        source,
+        memberships;
+        add_unassigned=true,
+        Pi=0.8,
+    )
+
+    global shared_subset_a = classes[1]
+    global shared_subset_b = classes[2]
+    global shared_subset_others = classes[3]
+    phenotypes = DataFrame(
+        ID=["1", "3", "4", "6"],
+        y=[0.2, -0.4, 0.6, 1.0],
+    )
+    model = build_model(
+        "y = intercept + shared_subset_a + shared_subset_b + shared_subset_others",
+        1.0,
+    )
+
+    mktempdir() do output_folder
+        output = runMCMC(
+            model,
+            phenotypes;
+            chain_length=8,
+            burnin=2,
+            output_samples_frequency=2,
+            output_folder=output_folder,
+            outputEBV=false,
+            output_heritability=true,
+            output_marker_effect_samples=false,
+            printout_frequency=99,
+            printout_model_info=false,
+            fast_blocks=false,
+            memory_guard=:off,
+            seed=123,
+        )
+
+        @test haskey(output, "marker effects shared_subset_a")
+        @test haskey(output, "marker effects shared_subset_b")
+        @test haskey(output, "marker effects shared_subset_others")
+        @test isfile(joinpath(
+            model.MCMCinfo.output_folder,
+            "MCMC_samples_class_heritability.txt",
+        ))
+    end
+end
+
 @testset "Shared dense classes run through ordinary multiclass MCMC" begin
     source_matrix = Float32[
         0 1 2
