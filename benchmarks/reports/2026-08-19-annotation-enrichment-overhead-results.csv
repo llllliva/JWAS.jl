@@ -1,0 +1,7 @@
+replicate,seed,enrichment_enabled,elapsed_seconds,n_observations,n_markers,n_annotations,chain_length,burnin,retained_outer_iterations,block_count,julia_threads,blas_threads
+1,20260819,false,2.9810345,100,500,10,1000,200,800,5,1,1
+1,20260819,true,2.990817959,100,500,10,1000,200,800,5,1,1
+2,20260820,true,2.651306709,100,500,10,1000,200,800,5,1,1
+2,20260820,false,2.653268083,100,500,10,1000,200,800,5,1,1
+3,20260821,false,2.814531583,100,500,10,1000,200,800,5,1,1
+3,20260821,true,2.826070042,100,500,10,1000,200,800,5,1,1

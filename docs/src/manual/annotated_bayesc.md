@@ -112,6 +112,88 @@ output["annotation coefficients genotypes"]
 The first row is the automatically added intercept, followed by `Annotation_1`,
 `Annotation_2`, and so on.
 
+## Overlap-Aware Heritability Enrichment
+
+Annotation enrichment is enabled by default and is accumulated at every
+post-burn-in MCMC iteration. The explicit keyword below is therefore optional:
+
+```julia
+output = runMCMC(
+    model,
+    phenotypes;
+    chain_length=2000,
+    burnin=500,
+    output_samples_frequency=10,
+    output_annotation_enrichment=true,
+)
+
+output["annotation heritability enrichment genotypes"]
+```
+
+In addition to the end-of-chain summary, JWAS writes the retained draws:
+
+```text
+MCMC_samples_annotation_h2_genotypes.txt
+MCMC_samples_annotation_enrichment_genotypes.txt
+```
+
+Each file has one retained iteration per row and one annotation group per
+column. Retention follows `burnin` and `output_samples_frequency`. A draw with
+invalid or zero total marker variance is written as `NaN` rather than copying a
+previous iteration. Multi-trait files prefix each annotation column with its
+trait name.
+
+For marker `j`, JWAS first computes its additive variance contribution
+
+```math
+v_j=2p_j(1-p_j)\alpha_j^2.
+```
+
+If the marker belongs to more than one annotation, this variance is not counted
+in full in every group. Let `eta_j` be the current probit linear predictor and
+`gamma_k` the coefficient for active annotation `k`. JWAS scores the annotation
+by the absolute leave-one-out change in inclusion probability:
+
+```math
+s_{jk}=|\Phi(\eta_j)-\Phi(\eta_j-\gamma_k)|.
+```
+
+The scores are normalized across that marker's active annotations, and `v_j` is
+divided using those normalized weights. If every score is numerically zero,
+JWAS divides `v_j` equally. A marker with no annotation is assigned to an
+automatically reported `Unannotated` group.
+
+The `SNP_Fraction` enrichment baseline uses fixed equal fractional membership:
+a SNP in two annotations contributes one half of a SNP to each baseline count.
+It does not use the posterior coefficient weights. Therefore every retained
+draw satisfies, up to floating-point error:
+
+```math
+\sum_k P_k=1, \qquad
+\sum_k H_k^2=H_{marker}^2, \qquad
+\sum_k f_k E_k=1,
+```
+
+where `P_k` is `H2_Proportion_Estimate`, `H_k^2` is
+`Heritability_Estimate`, `f_k` is `SNP_Fraction`, and `E_k` is
+`Enrichment_Estimate`. `SNP_Count` remains the raw number of SNP memberships,
+so overlapping raw counts can sum above the total SNP count. The output's
+`Allocation_Method` column records `probit_leave_one_out_partition`.
+
+This changes only the enrichment attribution. It does not create duplicate SNP
+effects or alter annotated BayesC sampling, marker-specific pi, or total marker
+heritability.
+
+Set `output_annotation_enrichment=false` when you intentionally want to skip
+this calculation and suppress the enrichment summary file. For models without
+an annotated genotype term, the default performs no enrichment work and writes
+no enrichment file.
+
+The enrichment table requires binary 0/1 annotation groups. Continuous
+annotation covariates remain valid predictors in the probit model, but the
+automatic enrichment output skips them because they do not define discrete SNP
+groups.
+
 ## Multi-Trait Method
 
 Dense 2-trait annotated BayesC is documented separately because it has a

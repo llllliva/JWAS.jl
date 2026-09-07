@@ -18,6 +18,36 @@ No-copy mode requires a concrete matrix whose element type matches the chosen
 precision. JWAS adopts the matrix and may mutate it during imputation or
 centering. File and DataFrame input continue to copy and reject no-copy mode.
 
+## Shared dense multiclass BayesC
+
+Overlapping BayesC classes can share one preprocessed dense genotype matrix:
+
+```julia
+base = get_genotypes(genotype_matrix, 1.0;
+                     method="BayesC", Pi=0.99,
+                     quality_control=false,
+                     copy_genotypes=false)
+classes = get_shared_genotype_classes(base, membership_matrix;
+                                      add_unassigned=true,
+                                      Pi=0.99)
+```
+
+The class objects contain zero-copy column views and independent BayesC model
+state. Single-trait Annotated BayesC marker-specific pi samples are written with
+one retained iteration per row and one marker per column.
+
+Single-trait Annotated BayesC enrichment is also overlap-safe: each SNP's
+additive variance is partitioned once across its active annotations using their
+current leave-one-out probit contributions. SNPs without memberships are
+reported as `Unannotated`. Annotation enrichment output is enabled by default;
+retained annotation heritability and enrichment draws are written with one
+iteration per row. Set `output_annotation_enrichment=false` to suppress it.
+
+Single-trait multiclass BayesC also writes
+`MCMC_samples_class_heritability.txt` when `output_heritability=true`. It uses a
+covariance allocation so class contributions sum to total marker heritability
+even when class designs overlap.
+
 [![CI](https://github.com/reworkhow/JWAS.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/reworkhow/JWAS.jl/actions/workflows/CI.yml)
 [![codecov](https://codecov.io/gh/reworkhow/JWAS.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/reworkhow/JWAS.jl)
 [![](https://img.shields.io/badge/docs-latest-blue.svg)](https://reworkhow.github.io/JWAS.jl/latest)

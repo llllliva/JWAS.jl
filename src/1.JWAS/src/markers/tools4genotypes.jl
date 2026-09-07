@@ -26,12 +26,13 @@ function center!(X::AbstractArray{T,2}) where T <: Any
 end
 
 function getXpRinvX(X, Rinv)
-    XpRinvX = [((X[:,i].*Rinv)'X[:,i]) for i=1:size(X,2)]
+    XpRinvX = [sum(abs2(x) * weight for (x, weight) in zip(view(X, :, i), Rinv))
+               for i in axes(X, 2)]
     return XpRinvX
 end
 
 function getXpRinvX(X)
-    XpRinvX = [dot(X[:,i],X[:,i]) for i=1:size(X,2)]
+    XpRinvX = [dot(view(X, :, i), view(X, :, i)) for i in axes(X, 2)]
     return XpRinvX
 end
 
@@ -78,13 +79,10 @@ function block_rhs!(rhs::AbstractVector,
 end
 
 function get_column_blocks_ref(X,fast_blocks=false)
-    xArray = Array{typeof(X)}(undef,length(fast_blocks))
-    @showprogress desc="building prerequisite matrices ..." for i in 1:length(fast_blocks)
-        pos_start = fast_blocks[i]
-        pos_end   = (i != length(fast_blocks)) ? (fast_blocks[i+1]-1) : size(X,2)
-        xArray[i] = view(X,:,pos_start:pos_end)
-    end
-    return xArray
+    return @showprogress desc="building prerequisite matrices ..." [
+        view(X, :, fast_blocks[i]:(i != length(fast_blocks) ? fast_blocks[i+1]-1 : size(X, 2)))
+        for i in eachindex(fast_blocks)
+    ]
 end
 
 """
@@ -235,7 +233,7 @@ function check_marker_memory_guard!(; mode::Symbol=:error,
 end
 
 mutable struct GibbsMats
-    X::Union{Array{Float64,2},Array{Float32,2}}
+    X::AbstractMatrix
     nrows::Int64
     ncols::Int64
     xArray     #do not declare type because it is a vector of views
@@ -244,7 +242,7 @@ mutable struct GibbsMats
     XArray
     XRinvArray
     XpRinvX
-    function GibbsMats(X::Union{Array{Float64,2},Array{Float32,2}},Rinv;fast_blocks=false)
+    function GibbsMats(X::AbstractMatrix{<:AbstractFloat},Rinv;fast_blocks=false)
         #single-locus, adjusting y, approach
         nrows,ncols = size(X)
         xArray      = get_column_ref(X)
@@ -285,13 +283,28 @@ end
 #
 #Note that Aligning genotypes with phenotypes and output_ID in single-step analysis
 #(incomplete genomic data) has been moved to SSBR.jl file.
+function genotype_row_indices(desired_ids::AbstractVector, genotype_ids::AbstractVector)
+    index_by_id = Dict(id => index for (index, id) in enumerate(genotype_ids))
+    rows = Vector{Int}(undef, length(desired_ids))
+    for (row, id) in enumerate(desired_ids)
+        haskey(index_by_id, id) || error("$id is not found!")
+        rows[row] = index_by_id[id]
+    end
+    return rows
+end
+
 function align_genotypes(mme::MME,output_heritability=false,single_step_analysis=false)
     if single_step_analysis==false
         if mme.output_ID != 0
             for Mi in mme.M
                 if mme.output_ID != Mi.obsID
-                    Zo  = map(Float32,mkmat_incidence_factor(mme.output_ID,Mi.obsID))
-                    Mi.output_genotypes =  Zo*Mi.genotypes
+                    if Mi.genotypes isa SubArray && !Mi.isGRM
+                        output_rows = genotype_row_indices(mme.output_ID, Mi.obsID)
+                        Mi.output_genotypes = view(Mi.genotypes, output_rows, :)
+                    else
+                        Zo  = map(Float32,mkmat_incidence_factor(mme.output_ID,Mi.obsID))
+                        Mi.output_genotypes =  Zo*Mi.genotypes
+                    end
                 else
                     Mi.output_genotypes =  Mi.genotypes #reference, not copy
                 end
@@ -309,10 +322,15 @@ function align_genotypes(mme::MME,output_heritability=false,single_step_analysis
         #**********CENTERING?*******************************************************
         if mme.obsID != mme.M[1].obsID
             for Mi in mme.M
-                Z  = map(Float32,mkmat_incidence_factor(mme.obsID,Mi.obsID))
-                genotypes = Z*Mi.genotypes
-                if Mi.isGRM #relationship matrix is provided
-                    genotypes = genotypes*Z'
+                if Mi.genotypes isa SubArray && !Mi.isGRM
+                    phenotype_rows = genotype_row_indices(mme.obsID, Mi.obsID)
+                    genotypes = view(Mi.genotypes, phenotype_rows, :)
+                else
+                    Z  = map(Float32,mkmat_incidence_factor(mme.obsID,Mi.obsID))
+                    genotypes = Z*Mi.genotypes
+                    if Mi.isGRM #relationship matrix is provided
+                        genotypes = genotypes*Z'
+                    end
                 end
                 Mi.genotypes = genotypes
                 Mi.obsID     = mme.obsID

@@ -59,7 +59,7 @@ include("input_data_validation.jl")
 #output
 include("output.jl")
 
-export build_model,set_covariate,set_random,add_genotypes,get_genotypes,prepare_streaming_genotypes
+export build_model,set_covariate,set_random,add_genotypes,get_genotypes,get_shared_genotype_classes,prepare_streaming_genotypes
 export outputMCMCsamples,outputEBV,getEBV
 export solve,runMCMC
 export describe
@@ -164,6 +164,7 @@ end
             #Genomic Prediction
             outputEBV                       = true,
             output_heritability             = true,
+            output_annotation_enrichment    = true,
             prediction_equation             = false,
             #MISC
             seed                            = false,
@@ -216,6 +217,13 @@ end
     For now, genomic data is always included. Genetic values including effects defined with genotype and pedigree information are returned if `prediction_equation`= false, defaulting to `false`.
     * Individual estimted genetic values and prediction error variances (PEVs) are returned if `outputEBV`=true, defaulting to `true`. Heritability and genetic
     variances are returned if `output_heritability`=`true`, defaulting to `true`. Note that estimation of heritability is computaionally intensive.
+    * Marker-additive heritability enrichment for each binary annotation column is returned if
+      `output_annotation_enrichment=true` (the default). Single-trait annotated BayesC partitions an overlapping
+      SNP's variance among its active annotations using normalized leave-one-out probit contributions,
+      with an automatic `Unannotated` group and equal-split fallback. It is updated at every
+      post-burn-in iteration and at every outer iteration when `fast_blocks` is enabled. Retained
+      annotation heritability and enrichment draws are written with one iteration per row according
+      to `output_samples_frequency`.
 * Miscellaneous Options
   * Print out the model information in REPL if `printout_model_info`=true; print out the monte carlo mean in REPL with `printout_frequency`,
     defaulting to `false`.
@@ -251,6 +259,7 @@ function runMCMC(mme::MME,df;
                 #Genomic Prediction
                 outputEBV                       = true,
                 output_heritability             = true,
+                output_annotation_enrichment    = true,
                 prediction_equation             = false,
                 #MISC
                 seed                            = false,
@@ -366,6 +375,28 @@ function runMCMC(mme::MME,df;
        (mme.nModels != 1 || RRM != false)
         error("Custom BayesR_gamma currently supports single-trait BayesR only.")
     end
+    if output_annotation_enrichment == true
+        if mme.M != 0
+            annotated_terms = [Mi for Mi in mme.M if has_marker_annotations(Mi)]
+            enrichment_terms = [Mi for Mi in annotated_terms if supports_annotation_enrichment(Mi)]
+            for Mi in annotated_terms
+                if !supports_annotation_enrichment(Mi)
+                    Mi.annotations.enrichment_stats = false
+                end
+            end
+            if !isempty(enrichment_terms)
+                RRM == false || error("Annotation enrichment does not currently support random regression models.")
+                single_step_analysis == false || error("Annotation enrichment does not currently support single-step analysis.")
+                for Mi in enrichment_terms
+                    Mi.annotations.enrichment_stats = initialize_annotation_enrichment(Mi)
+                end
+            end
+        end
+    elseif mme.M != 0
+        for Mi in mme.M
+            has_marker_annotations(Mi) && (Mi.annotations.enrichment_stats = false)
+        end
+    end
     #when using multi-thread, make sure the results are reproducible for users
     nThread = Threads.nthreads()
     if nThread>1
@@ -391,7 +422,7 @@ function runMCMC(mme::MME,df;
                    chain_length,burnin,output_samples_frequency,output_marker_effect_samples,
                    printout_model_info,printout_frequency, single_step_analysis,
                    fitting_J_vector,missing_phenotypes,
-                   update_priors_frequency,outputEBV,output_heritability,prediction_equation,
+                   update_priors_frequency,outputEBV,output_heritability,output_annotation_enrichment,prediction_equation,
                    seed,double_precision,output_folder,RRM,fast_blocks,independent_blocks,
                    inner_outer_diagnostics,copy(BayesR_gamma),BayesR_inner_iterations,
                    BayesR_pi_sampler)
@@ -727,6 +758,7 @@ function getMCMCinfo(mme)
     @printf("%-30s %20d\n","printout_frequency",MCMCinfo.printout_frequency)
     @printf("%-30s %20d\n","output_samples_frequency",MCMCinfo.output_samples_frequency)
     @printf("%-30s %20s\n","output_marker_effect_samples",MCMCinfo.output_marker_effect_samples ? "true" : "false")
+    @printf("%-30s %20s\n","output_annotation_enrichment",MCMCinfo.output_annotation_enrichment ? "true" : "false")
     @printf("%-30s %20s\n","inner_outer_diagnostics",MCMCinfo.inner_outer_diagnostics ? "true" : "false")
     @printf("%-30s %20s\n","BayesR_gamma",string(MCMCinfo.bayesr_gamma))
     @printf("%-30s %20s\n","BayesR_inner_iterations",string(MCMCinfo.bayesr_inner_iterations))

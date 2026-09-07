@@ -2,6 +2,250 @@ function has_marker_annotations(Mi)
     return Mi.annotations !== false
 end
 
+function supports_annotation_enrichment(Mi)
+    has_marker_annotations(Mi) || return false
+    annotation_matrix = @view Mi.annotations.design_matrix[:, 2:end]
+    return size(annotation_matrix, 2) > 0 &&
+           all(x -> x == 0.0 || x == 1.0, annotation_matrix)
+end
+
+function initialize_annotation_enrichment(Mi)
+    has_marker_annotations(Mi) || error("Annotation enrichment requires marker annotations.")
+    annotation_matrix = @view Mi.annotations.design_matrix[:, 2:end]
+    size(annotation_matrix, 2) > 0 || error("Annotation enrichment requires at least one non-intercept annotation column.")
+    all(x -> x == 0.0 || x == 1.0, annotation_matrix) ||
+        error("Annotation enrichment requires binary 0/1 annotation columns.")
+
+    allele_frequency = vec(Float64.(Mi.alleleFreq))
+    length(allele_frequency) == Mi.nMarkers ||
+        error("Annotation enrichment allele-frequency count must match nMarkers.")
+    size(annotation_matrix, 1) == Mi.nMarkers ||
+        error("Annotation enrichment row count must match nMarkers.")
+
+    marker_counts = Int.(vec(sum(annotation_matrix, dims=1)))
+    all(>(0), marker_counts) || error("Annotation enrichment groups must contain at least one post-QC marker.")
+    annotation_labels = ["Annotation_$annotation" for annotation in eachindex(marker_counts)]
+
+    overlap_partition = Mi.method == "BayesC" && Mi.ntraits == 1
+    if overlap_partition
+        membership_counts = vec(sum(annotation_matrix, dims=2))
+        unannotated_count = count(iszero, membership_counts)
+        effective_marker_counts = zeros(Float64, length(marker_counts) + (unannotated_count > 0))
+        for marker in eachindex(membership_counts)
+            memberships = Int(membership_counts[marker])
+            if memberships == 0
+                effective_marker_counts[end] += 1.0
+            else
+                fractional_membership = 1.0 / memberships
+                for annotation in axes(annotation_matrix, 2)
+                    if annotation_matrix[marker, annotation] == 1.0
+                        effective_marker_counts[annotation] += fractional_membership
+                    end
+                end
+            end
+        end
+        if unannotated_count > 0
+            push!(marker_counts, unannotated_count)
+            push!(annotation_labels, "Unannotated")
+        end
+        marker_fractions = effective_marker_counts ./ Mi.nMarkers
+        allocation_method = :probit_leave_one_out_partition
+    else
+        marker_fractions = marker_counts ./ Mi.nMarkers
+        allocation_method = :marginal_full_counting
+    end
+    marker_weights = 2.0 .* allele_frequency .* (1.0 .- allele_frequency)
+    shape = (Mi.ntraits, length(marker_counts))
+
+    return AnnotationEnrichmentStats(
+        marker_weights,
+        marker_counts,
+        marker_fractions,
+        annotation_labels,
+        allocation_method,
+        fill(NaN, shape),
+        fill(NaN, shape),
+        zeros(Float64, shape),
+        zeros(Float64, shape),
+        zeros(Float64, shape),
+        zeros(Float64, shape),
+        zeros(Float64, shape),
+        zeros(Float64, shape),
+        zeros(Int, shape),
+        zeros(Int, shape),
+        0,
+    )
+end
+
+"""
+    bayesc_overlap_group_variance(Mi, marker_variance, annotation_matrix)
+
+Partition single-trait annotated BayesC marker variance across overlapping
+annotations. An active annotation's nonnegative score is the absolute change in
+the current probit inclusion probability when that annotation is removed. The
+scores are normalized within marker, with equal splitting as the zero-score
+fallback. Markers without memberships are assigned to the optional final
+`Unannotated` group.
+"""
+function bayesc_overlap_group_variance(Mi,
+                                       marker_variance::AbstractVector,
+                                       annotation_matrix::AbstractMatrix)
+    stats = Mi.annotations.enrichment_stats
+    coefficients = Mi.annotations.coefficients
+    coefficients isa AbstractVector ||
+        error("Overlap-partitioned annotation enrichment currently requires single-trait annotated BayesC coefficients.")
+    return bayesc_overlap_group_variance(
+        coefficients,
+        marker_variance,
+        annotation_matrix,
+        length(stats.marker_counts),
+    )
+end
+
+function bayesc_overlap_group_variance(coefficients::AbstractVector{<:Real},
+                                       marker_variance::AbstractVector{<:Real},
+                                       annotation_matrix::AbstractMatrix{<:Real},
+                                       ngroups::Integer)
+    nannotations = size(annotation_matrix, 2)
+    length(coefficients) == nannotations + 1 ||
+        error("Annotation coefficient count does not match the enrichment design.")
+    group_variance = zeros(Float64, ngroups)
+    unannotated_index = length(group_variance) > nannotations ? length(group_variance) : 0
+    standard_normal = Normal()
+
+    for marker in axes(annotation_matrix, 1)
+        variance = Float64(marker_variance[marker])
+        nactive = 0
+        last_active = 0
+        eta = Float64(coefficients[1])
+        for annotation in 1:nannotations
+            if annotation_matrix[marker, annotation] == 1.0
+                nactive += 1
+                last_active = annotation
+                eta += Float64(coefficients[annotation + 1])
+            end
+        end
+
+        if nactive == 0
+            unannotated_index > 0 || error("Unannotated enrichment group was not initialized.")
+            group_variance[unannotated_index] += variance
+            continue
+        end
+
+        included_probability = cdf(standard_normal, eta)
+        score_total = 0.0
+        for annotation in 1:nannotations
+            if annotation_matrix[marker, annotation] == 1.0
+                without_annotation = cdf(
+                    standard_normal,
+                    eta - Float64(coefficients[annotation + 1]),
+                )
+                score_total += abs(included_probability - without_annotation)
+            end
+        end
+
+        allocated = 0.0
+        use_scores = isfinite(score_total) && score_total > eps(Float64)
+        for annotation in 1:nannotations
+            if annotation_matrix[marker, annotation] == 1.0
+                contribution = if annotation == last_active
+                    variance - allocated
+                elseif use_scores
+                    without_annotation = cdf(
+                        standard_normal,
+                        eta - Float64(coefficients[annotation + 1]),
+                    )
+                    variance * abs(included_probability - without_annotation) / score_total
+                else
+                    variance / nactive
+                end
+                group_variance[annotation] += contribution
+                allocated += contribution
+            end
+        end
+    end
+    return group_variance
+end
+
+function annotation_residual_variance(vres, trait::Integer)
+    if vres isa Number
+        return Float64(vres)
+    elseif vres isa AbstractVector
+        return Float64(vres[trait])
+    end
+    return Float64(vres[trait, trait])
+end
+
+function update_annotation_enrichment_moments!(stats, trait, heritability, proportion, enrichment)
+    for annotation in eachindex(stats.marker_counts)
+        n = stats.valid_draws[trait, annotation] + 1
+        stats.valid_draws[trait, annotation] = n
+
+        h2 = heritability[annotation]
+        stats.mean_heritability[trait, annotation] +=
+            (h2 - stats.mean_heritability[trait, annotation]) / n
+        stats.mean_heritability2[trait, annotation] +=
+            (h2^2 - stats.mean_heritability2[trait, annotation]) / n
+
+        prop = proportion[annotation]
+        stats.mean_proportion[trait, annotation] +=
+            (prop - stats.mean_proportion[trait, annotation]) / n
+        stats.mean_proportion2[trait, annotation] +=
+            (prop^2 - stats.mean_proportion2[trait, annotation]) / n
+
+        enrich = enrichment[annotation]
+        stats.mean_enrichment[trait, annotation] +=
+            (enrich - stats.mean_enrichment[trait, annotation]) / n
+        stats.mean_enrichment2[trait, annotation] +=
+            (enrich^2 - stats.mean_enrichment2[trait, annotation]) / n
+        stats.enrichment_gt_one[trait, annotation] += enrich > 1.0
+    end
+    return nothing
+end
+
+"""
+    update_annotation_enrichment!(Mi, residual_variance)
+
+Accumulate one marker-additive annotation heritability/enrichment draw from the
+current marker effects. The caller controls the MCMC cadence; the main sampler
+calls this once per post-burn-in iteration (once per outer iteration for
+`fast_blocks`).
+"""
+function update_annotation_enrichment!(Mi, residual_variance)
+    stats = Mi.annotations.enrichment_stats
+    stats === false && return nothing
+    stats.attempted_draws += 1
+    annotation_matrix = @view Mi.annotations.design_matrix[:, 2:end]
+
+    for trait in 1:Mi.ntraits
+        stats.current_heritability[trait, :] .= NaN
+        stats.current_enrichment[trait, :] .= NaN
+        marker_variance = stats.marker_weights .* abs2.(Float64.(Mi.α[trait]))
+        total_marker_variance = sum(marker_variance)
+        residual = annotation_residual_variance(residual_variance, trait)
+        denominator = total_marker_variance + residual
+        if !(isfinite(total_marker_variance) && total_marker_variance > 0.0 &&
+             isfinite(denominator) && denominator > 0.0)
+            continue
+        end
+
+        group_variance = if stats.allocation_method == :probit_leave_one_out_partition
+            bayesc_overlap_group_variance(Mi, marker_variance, annotation_matrix)
+        else
+            vec(annotation_matrix' * marker_variance)
+        end
+        proportion = group_variance ./ total_marker_variance
+        heritability = group_variance ./ denominator
+        enrichment = proportion ./ stats.marker_fractions
+        stats.current_heritability[trait, :] .= heritability
+        stats.current_enrichment[trait, :] .= enrichment
+        update_annotation_enrichment_moments!(
+            stats, trait, heritability, proportion, enrichment,
+        )
+    end
+    return nothing
+end
+
 """
     annotation_binary_bounds!(lower, upper, response)
 

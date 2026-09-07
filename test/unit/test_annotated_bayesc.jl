@@ -998,6 +998,14 @@ end
             @test haskey(output, "annotation coefficients annotated_geno")
             @test nrow(output["annotation coefficients annotated_geno"]) == size(annotations, 2) + 1
 
+            pi_samples = CSV.read(
+                joinpath("results", "MCMC_samples_pi_annotated_geno.txt"),
+                DataFrame,
+            )
+            @test names(pi_samples) == string.(model.M[1].markerID)
+            @test nrow(pi_samples) == 2
+            @test ncol(pi_samples) == model.M[1].nMarkers
+
             summary_text = mktemp() do path, io
                 redirect_stdout(io) do
                     describe(model)

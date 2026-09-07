@@ -97,6 +97,59 @@ end
 #                                PRIVATE FUNCTIONS
 # ===============================================================================================================
 
+function annotation_enrichment_dataframe(Mi)
+    stats = Mi.annotations.enrichment_stats
+    stats === false && return DataFrame()
+    result = DataFrame(
+        Trait=String[],
+        Annotation=String[],
+        SNP_Count=Int[],
+        SNP_Fraction=Float64[],
+        Heritability_Estimate=Float64[],
+        Heritability_SD=Float64[],
+        H2_Proportion_Estimate=Float64[],
+        H2_Proportion_SD=Float64[],
+        Enrichment_Estimate=Float64[],
+        Enrichment_SD=Float64[],
+        Pr_Enrichment_GT_1=Float64[],
+        Allocation_Method=String[],
+        Posterior_Iterations=Int[],
+        Posterior_Samples=Int[],
+    )
+
+    for trait in 1:Mi.ntraits, annotation in eachindex(stats.marker_counts)
+        n = stats.valid_draws[trait, annotation]
+        if n == 0
+            h2 = h2_sd = proportion = proportion_sd = enrichment = enrichment_sd = probability_gt_one = NaN
+        else
+            h2 = stats.mean_heritability[trait, annotation]
+            h2_sd = sqrt(max(0.0, stats.mean_heritability2[trait, annotation] - h2^2))
+            proportion = stats.mean_proportion[trait, annotation]
+            proportion_sd = sqrt(max(0.0, stats.mean_proportion2[trait, annotation] - proportion^2))
+            enrichment = stats.mean_enrichment[trait, annotation]
+            enrichment_sd = sqrt(max(0.0, stats.mean_enrichment2[trait, annotation] - enrichment^2))
+            probability_gt_one = stats.enrichment_gt_one[trait, annotation] / n
+        end
+        push!(result, (
+            string(Mi.trait_names[trait]),
+            stats.annotation_labels[annotation],
+            stats.marker_counts[annotation],
+            stats.marker_fractions[annotation],
+            h2,
+            h2_sd,
+            proportion,
+            proportion_sd,
+            enrichment,
+            enrichment_sd,
+            probability_gt_one,
+            string(stats.allocation_method),
+            stats.attempted_draws,
+            n,
+        ))
+    end
+    return result
+end
+
 ################################################################################
 #*******************************************************************************
 #2. Return Output Results (Dictionary)
@@ -224,6 +277,10 @@ function output_result(mme,output_folder,
                       SD=vec(permutedims(annotation_sd, (2, 1))),
                   )
               end
+              if ann.enrichment_stats !== false
+                  output["annotation heritability enrichment "*Mi.name] =
+                      annotation_enrichment_dataframe(Mi)
+              end
           end
       end
   end
@@ -307,6 +364,86 @@ function collapse_pi_for_output(Mi, pi_value)
         return pi_value[1]
     end
     return pi_value
+end
+
+function row_oriented_marker_pi_output(Mi, pi_value)
+    return Mi.method == "BayesC" &&
+           Mi.annotations !== false &&
+           Mi.ntraits == 1 &&
+           pi_value isa AbstractVector &&
+           length(pi_value) == Mi.nMarkers
+end
+
+function annotation_enrichment_sample_output(Mi)
+    return Mi.annotations !== false &&
+           Mi.annotations.enrichment_stats !== false
+end
+
+function annotation_enrichment_sample_headers(Mi)
+    labels = Mi.annotations.enrichment_stats.annotation_labels
+    if Mi.ntraits == 1
+        return labels
+    end
+    return [string(trait, "_", label) for trait in Mi.trait_names for label in labels]
+end
+
+function annotation_enrichment_sample_row(values::AbstractMatrix)
+    return transpose(vec(permutedims(values)))
+end
+
+function multiclass_bayesc_class_h2_output(mme)
+    return mme.M != 0 &&
+           length(mme.M) > 1 &&
+           mme.nModels == 1 &&
+           mme.MCMCinfo.RRM == false &&
+           mme.MCMCinfo.output_heritability == true &&
+           all(Mi -> Mi.method == "BayesC" && Mi.ntraits == 1 &&
+                     Mi.storage_mode == :dense && !Mi.isGRM, mme.M)
+end
+
+"""
+    multiclass_bayesc_class_heritability(mme, residual_variance)
+
+Return conserved class-specific heritability contributions for a single-trait
+multiclass BayesC model. Class `c` receives `cov(g_c, g_total)` divided by total
+phenotypic variance. The contributions therefore sum to total marker
+heritability even when class designs overlap.
+"""
+function multiclass_bayesc_class_heritability(mme, residual_variance)
+    nclasses = length(mme.M)
+    nobs = size(mme.M[1].genotypes, 1)
+    nobs > 1 || return fill(NaN, nclasses)
+    all(size(Mi.genotypes, 1) == nobs for Mi in mme.M) ||
+        error("Multiclass BayesC genotype terms must have the same aligned observation count.")
+
+    class_values = Matrix{Float64}(undef, nobs, nclasses)
+    for (class, Mi) in enumerate(mme.M)
+        class_values[:, class] .= Mi.genotypes * Mi.α[1]
+    end
+    total_values = vec(sum(class_values, dims=2))
+    total_sum = sum(total_values)
+    total_variance = (dot(total_values, total_values) - total_sum^2 / nobs) / (nobs - 1)
+    residual = residual_variance isa Number ?
+        Float64(residual_variance) : Float64(residual_variance[1, 1])
+    denominator = total_variance + residual
+    if !(isfinite(total_variance) && total_variance > 0.0 &&
+         isfinite(denominator) && denominator > 0.0)
+        return fill(NaN, nclasses)
+    end
+
+    attributed_variance = zeros(Float64, nclasses)
+    allocated = 0.0
+    for class in 1:nclasses
+        if class == nclasses
+            attributed_variance[class] = total_variance - allocated
+        else
+            values = view(class_values, :, class)
+            contribution = (dot(values, total_values) - sum(values) * total_sum / nobs) / (nobs - 1)
+            attributed_variance[class] = contribution
+            allocated += contribution
+        end
+    end
+    return attributed_variance ./ denominator
 end
 
 function pi2dataframe(Mi, mean_pi, mean_pi2)
@@ -396,8 +533,15 @@ function output_MCMC_samples_setup(mme,nIter,output_samples_frequency,file_name=
             push!(outvar,"bayesr_class_variances"*"_"*Mi.name)
         end
         push!(outvar,"pi"*"_"*Mi.name)
+        if annotation_enrichment_sample_output(Mi)
+            push!(outvar,"annotation_h2_"*Mi.name)
+            push!(outvar,"annotation_enrichment_"*Mi.name)
+        end
     end
  end
+  if multiclass_bayesc_class_h2_output(mme)
+      push!(outvar, "class_heritability")
+  end
 
   #non-marker location parameters
   for trmi in  mme.outputSamplesVec
@@ -483,7 +627,18 @@ function output_MCMC_samples_setup(mme,nIter,output_samples_frequency,file_name=
             writedlm(outfile["bayesr_class_variances"*"_"*Mi.name],
                      transubstrarr(["Class$(i)" for i in 1:length(mme.MCMCinfo.bayesr_gamma)]), ',')
         end
+        if row_oriented_marker_pi_output(Mi, Mi.π)
+            writedlm(outfile["pi"*"_"*Mi.name], transubstrarr(Mi.markerID), ',')
+        end
+        if annotation_enrichment_sample_output(Mi)
+            annotation_header = transubstrarr(annotation_enrichment_sample_headers(Mi))
+            writedlm(outfile["annotation_h2_"*Mi.name], annotation_header, ',')
+            writedlm(outfile["annotation_enrichment_"*Mi.name], annotation_header, ',')
+        end
     end
+  end
+  if multiclass_bayesc_class_h2_output(mme)
+      writedlm(outfile["class_heritability"], transubstrarr([Mi.name for Mi in mme.M]), ',')
   end
 
   if mme.pedTrmVec != 0
@@ -565,11 +720,33 @@ function output_MCMC_samples(mme,vRes,G0,
               writedlm(outfile["bayesr_class_variances"*"_"*Mi.name],class_variance',',')
           end
           pi_output = collapse_pi_for_output(Mi, Mi.π)
-          writedlm(outfile["pi"*"_"*Mi.name],pi_output,',')
-          if !(typeof(pi_output) <: Number) #add a blank line
+          if row_oriented_marker_pi_output(Mi, pi_output)
+              writedlm(outfile["pi"*"_"*Mi.name],transpose(pi_output),',')
+          else
+              writedlm(outfile["pi"*"_"*Mi.name],pi_output,',')
+          end
+          if !(typeof(pi_output) <: Number) && !row_oriented_marker_pi_output(Mi, pi_output) #add a blank line
               println(outfile["pi"*"_"*Mi.name])
           end
+          if annotation_enrichment_sample_output(Mi)
+              stats = Mi.annotations.enrichment_stats
+              writedlm(
+                  outfile["annotation_h2_"*Mi.name],
+                  annotation_enrichment_sample_row(stats.current_heritability),
+                  ',',
+              )
+              writedlm(
+                  outfile["annotation_enrichment_"*Mi.name],
+                  annotation_enrichment_sample_row(stats.current_enrichment),
+                  ',',
+              )
+          end
       end
+    end
+
+    if multiclass_bayesc_class_h2_output(mme)
+        class_h2 = multiclass_bayesc_class_heritability(mme, vRes)
+        writedlm(outfile["class_heritability"], transpose(class_h2), ',')
     end
 
     if mme.MCMCinfo.outputEBV == true

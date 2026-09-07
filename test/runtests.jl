@@ -72,6 +72,10 @@ println()
             include(joinpath(@__DIR__, "unit", "test_genotype_matrix_ownership.jl"))
         end
 
+        @testset "Shared Dense Multiclass" begin
+            include(joinpath(@__DIR__, "unit", "test_shared_dense_multiclass.jl"))
+        end
+
         @testset "Memory Guardrails" begin
             include(joinpath(@__DIR__, "unit", "test_memory_guardrails.jl"))
         end
@@ -98,6 +102,10 @@ println()
 
         @testset "Annotated BayesR" begin
             include(joinpath(@__DIR__, "unit", "test_annotated_bayesr.jl"))
+        end
+
+        @testset "Annotation Heritability Enrichment" begin
+            include(joinpath(@__DIR__, "unit", "test_annotation_enrichment.jl"))
         end
 
         @testset "BayesR Gamma and Inner/Outer Diagnostics" begin

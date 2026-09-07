@@ -21,6 +21,5 @@ DataFrame rejection. The focused test passed 8 assertions. The paired
 submission-code loader was also smoke-tested with a memory-mappable JLD2
 matrix and noncontiguous newID rows.
 
-The complete target-branch test suite (integration tests disabled by its
-standard configuration) passed 1,066 of 1,066 assertions on Julia 1.12.5 with
-compiled modules disabled to accommodate the branch's Julia 1.11 manifest.
+The complete default test suite (integration tests disabled by its standard
+configuration) passed 1,096 of 1,096 assertions on Julia 1.12.5.

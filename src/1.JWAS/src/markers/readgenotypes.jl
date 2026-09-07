@@ -468,3 +468,113 @@ function get_genotypes(file::Union{AbstractString,Array{Float64,2},Array{Float32
     end
     return genotypes
 end
+
+"""
+    get_shared_genotype_classes(source::Genotypes, memberships; kwargs...)
+
+Create BayesC genotype terms whose class matrices are zero-copy column views
+into one preprocessed dense genotype matrix.
+
+`memberships` must have one row per post-QC marker in `source` and one column
+per class. Values must be binary; overlapping rows are allowed. With
+`add_unassigned=true`, markers with no membership are placed in a final
+`Others` class. Returned terms have independent BayesC pi, marker-effect
+variance, and MCMC state even when they reference the same physical marker.
+
+Preprocess, impute, center, and quality-control `source` before calling this
+function. Include only the returned class terms, not `source`, in the model.
+"""
+function get_shared_genotype_classes(source::Genotypes,
+                                     memberships::AbstractMatrix{<:Real};
+                                     add_unassigned::Bool=true,
+                                     class_names=nothing,
+                                     G=false,
+                                     Pi=0.0,
+                                     estimatePi::Bool=true,
+                                     G_is_marker_variance::Bool=false,
+                                     df::Real=4.0,
+                                     estimate_variance::Bool=true,
+                                     estimate_scale::Bool=false,
+                                     constraint::Bool=false,
+                                     multi_trait_sampler::Symbol=:I)
+    source.storage_mode == :dense ||
+        error("Shared genotype classes require a dense source Genotypes object.")
+    source.isGRM && error("Shared genotype classes require marker genotypes, not a GRM.")
+    source.method == "BayesC" ||
+        error("Shared genotype classes currently support a BayesC source only.")
+    size(memberships, 1) == source.nMarkers ||
+        error("memberships rows ($(size(memberships, 1))) must match the source post-QC marker count ($(source.nMarkers)).")
+    size(memberships, 2) > 0 || error("memberships must contain at least one class column.")
+    all(value -> value == 0 || value == 1, memberships) ||
+        error("memberships must contain only binary 0/1 values.")
+    multi_trait_sampler in (:auto, :I, :II) ||
+        error("multi_trait_sampler must be one of :auto, :I, or :II.")
+
+    marker_indices = [findall(!iszero, view(memberships, :, classi))
+                      for classi in axes(memberships, 2)]
+    assigned = falses(source.nMarkers)
+    for indices in marker_indices
+        assigned[indices] .= true
+    end
+    if add_unassigned
+        unassigned = findall(!, assigned)
+        !isempty(unassigned) && push!(marker_indices, unassigned)
+    end
+    any(isempty, marker_indices) &&
+        error("Every requested class must contain at least one marker.")
+
+    names_out = if class_names === nothing
+        [i <= size(memberships, 2) ? "Class_$i" : "Others"
+         for i in eachindex(marker_indices)]
+    else
+        collect(string.(class_names))
+    end
+    length(names_out) == length(marker_indices) ||
+        error("class_names must have one name per returned class ($(length(marker_indices))).")
+    length(unique(names_out)) == length(names_out) ||
+        error("class_names must be unique.")
+
+    classes = Genotypes[]
+    for (classi, indices) in enumerate(marker_indices)
+        class_matrix = view(source.genotypes, :, indices)
+        class_p = view(source.alleleFreq, :, indices)
+        class_sum2pq = sum(2 .* class_p .* (1 .- class_p))
+        class_genotypes = Genotypes(
+            source.obsID,
+            source.markerID[indices],
+            source.nObs,
+            length(indices),
+            class_p,
+            class_sum2pq,
+            source.centered,
+            class_matrix,
+            false,
+        )
+        class_genotypes.name = names_out[classi]
+        class_genotypes.G = Variance(
+            G_is_marker_variance ? copy_pi_input(G) : false,
+            df,
+            false,
+            estimate_variance,
+            estimate_scale,
+            constraint,
+        )
+        class_genotypes.genetic_variance = Variance(
+            G_is_marker_variance ? false : copy_pi_input(G),
+            df,
+            false,
+            estimate_variance,
+            estimate_scale,
+            constraint,
+        )
+        class_genotypes.method = "BayesC"
+        class_genotypes.estimatePi = estimatePi
+        class_genotypes.π = copy_pi_input(Pi)
+        class_genotypes.annotation_start_pi = false
+        class_genotypes.annotations = false
+        class_genotypes.multi_trait_sampler = multi_trait_sampler
+        push!(classes, class_genotypes)
+    end
+
+    return classes
+end
