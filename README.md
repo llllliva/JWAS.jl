@@ -48,6 +48,11 @@ Single-trait multiclass BayesC also writes
 covariance allocation so class contributions sum to total marker heritability
 even when class designs overlap.
 
+For single-trait dense BayesC with fast blocks,
+`inner_outer_diagnostics=true` adds `InnerOuter_Model_Frequency` to the final
+marker-effects output. This PIP uses every post-burn-in inner marker update;
+the existing `Model_Frequency` remains the retained outer-iteration PIP.
+
 [![CI](https://github.com/reworkhow/JWAS.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/reworkhow/JWAS.jl/actions/workflows/CI.yml)
 [![codecov](https://codecov.io/gh/reworkhow/JWAS.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/reworkhow/JWAS.jl)
 [![](https://img.shields.io/badge/docs-latest-blue.svg)](https://reworkhow.github.io/JWAS.jl/latest)

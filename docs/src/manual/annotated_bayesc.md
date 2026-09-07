@@ -416,3 +416,36 @@ where `N_{0c}` and `N_{1c}` are the excluded and included marker counts in class
 equivalent only if Annotated BayesC is changed to use the same direct
 class-specific Beta update, or if the multi-class model is changed to use the
 same probit-generated class probabilities as Annotated BayesC.
+
+## Inner/Outer PIP with Fast Blocks
+
+Single-trait dense Annotated BayesC can summarize every post-burn-in inner
+marker update performed by the fast-block sampler:
+
+```julia
+output = runMCMC(
+    model,
+    phenotypes;
+    fast_blocks=true,
+    inner_outer_diagnostics=true,
+)
+```
+
+The final `marker_effects_<genotype>.txt` table then contains:
+
+| Column | Meaning |
+| --- | --- |
+| `Model_Frequency` | Existing PIP from retained outer iterations |
+| `InnerOuter_Samples` | Number of post-burn-in inner updates recorded for the marker |
+| `InnerOuter_Model_Frequency` | Fraction of inner updates in which the marker was included |
+| `InnerOuter_Estimate` | Mean marker effect over inner updates, including zero effects |
+| `InnerOuter_SD` | Marker-effect standard deviation over inner updates |
+
+The inner/outer summary is accumulated online and does not retain individual
+inner draws. It is independent of `output_samples_frequency`; that setting
+continues to control outer-chain files. Because the final block may contain
+fewer markers, `InnerOuter_Samples` can differ between markers.
+
+This option requires single-trait dense BayesC and `fast_blocks != false`.
+Streaming and multi-trait BayesC are not supported. The annotation-dependent
+pi model and annotation heritability/enrichment calculation are unchanged.

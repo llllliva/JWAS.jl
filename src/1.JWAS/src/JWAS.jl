@@ -235,7 +235,7 @@ end
   * `BayesR_inner_iterations` optionally sets the number of post-burn-in inner marker-update repetitions per fast-block sweep. The default `false` preserves the calculated legacy rule (`nreps=block_size`); burn-in always uses one repetition. When the keyword is `false`, `BAYESR_INNER_ITERATIONS` may be set to a positive integer in the environment, while missing, `false`, or `auto` retains the calculated default.
   * `BayesR_pi_sampler` selects the BayesR mixture-proportion transition. The default `:standard` preserves the existing sampled-pi Gibbs update. Set `:collapsed` to integrate the global pi vector out of marker-class updates while retaining end-of-outer-cycle pi draws for output. The collapsed option currently requires ordinary single-trait, dense, unannotated BayesR with `estimatePi=true` and `independent_blocks=false`.
   * When `fast_blocks=true`, a comma-separated `BAYESR_BLOCK_STARTS` environment value may provide explicit 1-based block starts. Explicit numeric or vector `fast_blocks` keywords take precedence.
-  * `inner_outer_diagnostics=true` records inner fast-block BayesR class draws and adds inner/outer PIP columns to the marker-effects output. It requires `fast_blocks != false` and single-trait, dense BayesR genotypes.
+  * `inner_outer_diagnostics=true` records inner fast-block marker draws and adds inner/outer effect and PIP columns to the marker-effects output. It requires `fast_blocks != false` and single-trait, dense BayesC or BayesR genotypes. BayesR output also includes class-specific inner PIPs.
   * `memory_guard` controls the marker-memory precheck before MCMC (`:error`, `:warn`, `:off`; default `:error`).
   * `memory_guard_ratio` sets the allowed fraction of `Sys.total_memory()` for the precheck (default `0.80`).
 """
@@ -476,11 +476,14 @@ function runMCMC(mme::MME,df;
             error("inner_outer_diagnostics=true requires fast_blocks != false.")
         mme.MCMCinfo.burnin < mme.MCMCinfo.chain_length ||
             error("inner_outer_diagnostics=true requires burnin ($(mme.MCMCinfo.burnin)) to be smaller than the fast-block outer chain length ($(mme.MCMCinfo.chain_length)).")
-        mme.M != 0 || error("inner_outer_diagnostics=true requires a BayesR genotype term.")
+        mme.M != 0 || error("inner_outer_diagnostics=true requires a BayesC or BayesR genotype term.")
         for Mi in mme.M
-            Mi.method == "BayesR" || error("inner_outer_diagnostics=true currently supports BayesR only.")
-            Mi.ntraits == 1 || error("inner_outer_diagnostics=true currently supports single-trait BayesR only.")
-            Mi.storage_mode == :dense || error("inner_outer_diagnostics=true currently supports dense BayesR genotypes only.")
+            Mi.method in ("BayesC", "BayesR") ||
+                error("inner_outer_diagnostics=true currently supports BayesC and BayesR only.")
+            Mi.ntraits == 1 ||
+                error("inner_outer_diagnostics=true currently supports single-trait BayesC or BayesR only.")
+            Mi.storage_mode == :dense ||
+                error("inner_outer_diagnostics=true currently supports dense BayesC or BayesR genotypes only.")
         end
     end
     ############################################################################

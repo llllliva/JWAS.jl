@@ -108,24 +108,32 @@ function BayesABC_streaming!(backend,xpRinvx,
 end
 
 
-function BayesABC_block!(genotypes,ycorr,vare,locus_effect_variances,Rinv=ones(eltype(ycorr),length(ycorr)),independent_blocks=false)
+function BayesABC_block!(genotypes,ycorr,vare,locus_effect_variances,
+                         Rinv=ones(eltype(ycorr),length(ycorr)),
+                         independent_blocks=false,
+                         inner_outer_stats=false,
+                         iter::Integer=0,
+                         burnin::Integer=0)
     BayesABC_block!(genotypes.MArray,genotypes.mpRinvm,
               genotypes.genotypes,genotypes.MpRinvM,
               ycorr,genotypes.α[1],genotypes.β[1],genotypes.δ[1],vare,
-              locus_effect_variances,genotypes.π,Rinv,independent_blocks)
+              locus_effect_variances,genotypes.π,Rinv,independent_blocks,
+              inner_outer_stats,iter,burnin)
 end
 
 function BayesABC_block!(XArray,xpRinvx,
                    X, XpRinvX,
                    yCorr,
                    α,β,δ,
-                   vare,varEffects,π,Rinv,independent_blocks=false)
+                   vare,varEffects,π,Rinv,independent_blocks=false,
+                   inner_outer_stats=false,iter::Integer=0,burnin::Integer=0)
     if independent_blocks == true
         return BayesABC_block_independent!(XArray,xpRinvx,
                                            X,XpRinvX,
                                            yCorr,
                                            α,β,δ,
-                                           vare,varEffects,π,Rinv)
+                                           vare,varEffects,π,Rinv,
+                                           inner_outer_stats,iter,burnin)
     end
 
     nMarkers      = length(α)
@@ -175,6 +183,14 @@ function BayesABC_block!(XArray,xpRinvx,
                     β[locus_j] = randn()*sqrt(varEffects[locus_j])
                     α[locus_j] = 0
                 end
+                if inner_outer_stats !== false && iter > burnin
+                    record_bayesr_inner_draw!(
+                        inner_outer_stats,
+                        α[locus_j],
+                        Int(δ[locus_j]) + 1,
+                        locus_j,
+                    )
+                end
             end
         end
 
@@ -191,7 +207,10 @@ function BayesABC_block_independent!(XArray,xpRinvx,
                                      X, XpRinvX,
                                      yCorr,
                                      α,β,δ,
-                                     vare,varEffects,π,Rinv)
+                                     vare,varEffects,π,Rinv,
+                                     inner_outer_stats=false,
+                                     iter::Integer=0,
+                                     burnin::Integer=0)
     nMarkers      = length(α)
     pi_vec        = bayesabc_pi_vector(π, nMarkers)
     logPi         = log.(pi_vec)
@@ -240,6 +259,14 @@ function BayesABC_block_independent!(XArray,xpRinvx,
                     δ[locus_j] = 0
                     β[locus_j] = randn(rng)*sqrt(varEffects[locus_j])
                     α[locus_j] = 0
+                end
+                if inner_outer_stats !== false && iter > burnin
+                    record_bayesr_inner_draw!(
+                        inner_outer_stats,
+                        α[locus_j],
+                        Int(δ[locus_j]) + 1,
+                        locus_j,
+                    )
                 end
             end
         end

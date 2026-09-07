@@ -84,6 +84,10 @@ println()
             include(joinpath(@__DIR__, "unit", "test_bayesabc_block_memory.jl"))
         end
 
+        @testset "BayesC Inner/Outer Diagnostics" begin
+            include(joinpath(@__DIR__, "unit", "test_bayesc_innerouter.jl"))
+        end
+
         @testset "Streaming Genotype Codec" begin
             include(joinpath(@__DIR__, "unit", "test_streaming_codec.jl"))
         end

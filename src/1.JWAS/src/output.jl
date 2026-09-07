@@ -210,12 +210,14 @@ function output_result(mme,output_folder,
               marker_effects_output[!, :Class3_Frequency] = class3
               marker_effects_output[!, :Class4_Frequency] = class4
               marker_effects_output[!, :MediumLarge_Frequency] = class3 .+ class4
-              if Mi.innerOuterStats !== false
-                  inner_outer = summarize_bayesr_inner_outer(Mi.innerOuterStats)
-                  marker_effects_output[!, :InnerOuter_Samples] = inner_outer.draws
-                  marker_effects_output[!, :InnerOuter_Estimate] = inner_outer.effect_mean
-                  marker_effects_output[!, :InnerOuter_SD] = inner_outer.effect_sd
-                  marker_effects_output[!, :InnerOuter_Model_Frequency] = inner_outer.inclusion_pip
+          end
+          if Mi.innerOuterStats !== false
+              inner_outer = summarize_bayesr_inner_outer(Mi.innerOuterStats)
+              marker_effects_output[!, :InnerOuter_Samples] = inner_outer.draws
+              marker_effects_output[!, :InnerOuter_Estimate] = inner_outer.effect_mean
+              marker_effects_output[!, :InnerOuter_SD] = inner_outer.effect_sd
+              marker_effects_output[!, :InnerOuter_Model_Frequency] = inner_outer.inclusion_pip
+              if Mi.method == "BayesR"
                   marker_effects_output[!, :InnerOuter_Mean_Delta] = inner_outer.mean_delta
                   for classi in axes(inner_outer.class_pip, 2)
                       marker_effects_output[!, Symbol("InnerOuter_Class", classi, "_PIP")] =

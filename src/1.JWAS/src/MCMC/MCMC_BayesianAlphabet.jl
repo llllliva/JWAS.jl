@@ -124,6 +124,10 @@ function MCMC_BayesianAlphabet(mme,df)
                     Mi.mean_pi,Mi.mean_pi2 = 0.0,0.0      #inclusion probability
                 end
             end
+            if Mi.method == "BayesC"
+                Mi.innerOuterStats = mme.MCMCinfo.inner_outer_diagnostics ?
+                    BayesRInnerOuterStats(Mi.nMarkers, 2) : false
+            end
             if Mi.method == "BayesR"
                 if bayesr_pi_sampler === :collapsed
                     starting_distribution = Categorical(Float64.(Mi.π))
@@ -267,7 +271,17 @@ function MCMC_BayesianAlphabet(mme,df)
                                 BayesABC!(Mi,ycorr,mme.R.val,locus_effect_variances)
                             end
                         else
-                            BayesABC_block!(Mi,ycorr,mme.R.val,locus_effect_variances,invweights,mme.MCMCinfo.independent_blocks)
+                            BayesABC_block!(
+                                Mi,
+                                ycorr,
+                                mme.R.val,
+                                locus_effect_variances,
+                                invweights,
+                                mme.MCMCinfo.independent_blocks,
+                                Mi.innerOuterStats,
+                                iter,
+                                burnin,
+                            )
                         end
                     end
                 elseif Mi.method == "BayesR"

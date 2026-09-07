@@ -4,7 +4,11 @@ This branch adds optional BayesR diagnostics and user-defined mixture-class vari
 
 ## Branch and scope
 
-The implementation is based on the fresh `master` checkout of `reworkhow/JWAS.jl`. The changes are isolated to the BayesR path, its output bookkeeping, and tests. BayesC, BayesA, BayesB, BayesL, RR-BLUP, GBLUP, and the default BayesR dispatch remain compatible with the original API.
+The implementation is based on the fresh `master` checkout of
+`reworkhow/JWAS.jl`. BayesR supports configurable class behavior and BayesC
+shares the opt-in inner/outer diagnostic pathway. BayesA, BayesB, BayesL,
+RR-BLUP, GBLUP, and runs with diagnostics disabled retain their original API
+and behavior.
 
 ## User-defined BayesR gamma
 
@@ -60,15 +64,20 @@ runMCMC(model, phenotypes;
     inner_outer_diagnostics=true)
 ```
 
-This mode requires fast blocks, dense genotypes, and single-trait BayesR. During each retained outer iteration, the sampler records the class and effect from each inner marker update. The final marker-effects output adds:
+This mode requires fast blocks, dense genotypes, and single-trait BayesC or
+BayesR. During each post-burn-in outer iteration, the sampler records the state
+and effect from each inner marker update. The common final marker-effects
+columns are:
 
 | Column | Meaning |
 |---|---|
 | `InnerOuter_Samples` | Number of retained inner draws for the marker |
-| `InnerOuter_Model_Frequency` | Probability that the marker is non-null, `P(delta > 1)` |
-| `InnerOuter_Class1_PIP` through `InnerOuter_Class4_PIP` | Probability of each BayesR class |
-| `InnerOuter_Mean_Delta` | Mean numeric class index, from 1 to 4 |
+| `InnerOuter_Model_Frequency` | Probability that the marker is included; `P(delta = 1)` for BayesC and `P(delta > 1)` for BayesR |
 | `InnerOuter_Estimate`, `InnerOuter_SD` | Effect mean and SD from inner draws |
+
+BayesR additionally reports `InnerOuter_Class1_PIP` through
+`InnerOuter_Class4_PIP` and `InnerOuter_Mean_Delta`. BayesC has only excluded
+and included states, so `InnerOuter_Model_Frequency` is its requested PIP.
 
 The original outer-iteration columns remain available:
 

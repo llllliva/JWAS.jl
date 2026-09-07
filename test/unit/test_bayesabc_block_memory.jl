@@ -33,3 +33,15 @@ end
     alloc_large = measure_block_alloc(nobs,512,block_size)
     @test alloc_large <= alloc_small * 12
 end
+
+@testset "BayesABC independent blocks record inner draws" begin
+    args = make_block_inputs(24, 5, 2)
+    stats = JWAS.BayesRInnerOuterStats(5, 2)
+    Random.seed!(912)
+    JWAS.BayesABC_block!(args..., true, stats, 2, 1)
+    summary = JWAS.summarize_bayesr_inner_outer(stats)
+
+    @test summary.draws == UInt64[2, 2, 2, 2, 1]
+    @test all(isfinite, summary.inclusion_pip)
+    @test all(0.0 .<= summary.inclusion_pip .<= 1.0)
+end
