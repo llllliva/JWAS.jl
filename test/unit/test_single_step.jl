@@ -1,5 +1,61 @@
 # Unit tests for single-step analysis regressions
-using Test, JWAS, DataFrames, CSV, JWAS.Datasets
+using Test, JWAS, DataFrames, CSV, JWAS.Datasets, LinearAlgebra, SparseArrays
+
+@testset "Chunked single-step genotype imputation" begin
+    observed = Float32[
+        0 1 2 0 1
+        2 1 0 1 2
+        1 0 1 2 0
+    ]
+
+    # Reorder the three observed animals into pedigree-genotyped order.
+    Zgeno = sparse(Float64[
+        0 1 0
+        1 0 0
+        0 0 1
+    ])
+
+    # Small deterministic analogue of the block system used by SSBR.jl.
+    lhs = sparse(Diagonal(Float64[2, 3, 1, 1, 1]))
+    rhs = sparse(Float64[
+        -1.0  0.0 -0.5
+         0.0 -1.5 -0.5
+         1.0  0.0  0.0
+         0.0  1.0  0.0
+         0.0  0.0  1.0
+    ])
+    Zpheno = sparse(Float64[
+        1 0 0 0 0
+        0 0 0 1 0
+        0 0 0 0 1
+        0 1 0 0 0
+    ])
+    Zout = sparse(Float64[
+        0 0 1 0 0
+        0 0 0 0 1
+    ])
+
+    expected_pedigree = lhs \ (rhs * (Zgeno * observed))
+    expected_pheno = Float32.(Zpheno * expected_pedigree)
+    expected_out = Float32.(Zout * expected_pedigree)
+
+    # A chunk size of two forces three chunks for the five markers.
+    actual_pheno, actual_out = JWAS._impute_genotypes_in_chunks(
+        observed,
+        Zgeno,
+        lhs,
+        rhs,
+        Zpheno,
+        Zout;
+        markerperchunk=2,
+        show_progress=false,
+    )
+
+    @test eltype(actual_pheno) === Float32
+    @test eltype(actual_out) === Float32
+    @test actual_pheno ≈ expected_pheno
+    @test actual_out ≈ expected_out
+end
 
 @testset "Single-step analysis" begin
     phenofile = Datasets.dataset("phenotypes.txt", dataset_name="demo_7animals")

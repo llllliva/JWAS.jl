@@ -80,12 +80,41 @@ end
 ############################################################################
 # Genotypes
 ############################################################################
+function _impute_genotypes_in_chunks(genotypes,Zgeno,lhs,rhs,Zpheno,Zout;
+                                     markerperchunk::Integer=1000,
+                                     show_progress::Bool=true)
+    markerperchunk > 0 || error("markerperchunk must be positive.")
+    data_type = eltype(genotypes)
+    nmarkers = size(genotypes,2)
+    Mpheno = Matrix{data_type}(undef,size(Zpheno,1),nmarkers)
+    Mout = Matrix{data_type}(undef,size(Zout,1),nmarkers)
+    nchunks = cld(nmarkers,markerperchunk)
+    progress = show_progress ? Progress(nchunks; desc="imputing genotypes for non-genotyped individuals") : nothing
+
+    for chunk_start in 1:markerperchunk:nmarkers
+        myrange = chunk_start:min(chunk_start+markerperchunk-1,nmarkers)
+
+        # Apply the observed-genotype row permutation to only one marker chunk.
+        # The historical implementation formed Zgeno*genotypes for every marker
+        # at once, keeping another complete animal-by-marker matrix in memory.
+        Mg_chunk = Zgeno*view(genotypes,:,myrange)
+        Mped_chunk = lhs\(rhs*Mg_chunk)
+
+        # Sparse pedigree calculations retain their promoted solve precision.
+        # Conversion happens once, directly into the final storage precision.
+        view(Mpheno,:,myrange) .= Zpheno*Mped_chunk
+        view(Mout,:,myrange) .= Zout*Mped_chunk
+        show_progress && next!(progress)
+    end
+
+    return Mpheno,Mout
+end
+
 function impute_genotypes(geno,ped,mme,Ai_nn,Ai_ng,df,big_memory=false)
-    data_type = typeof(geno.genotypes[1,1]) #e.g. Float32
+    data_type = eltype(geno.genotypes) #e.g. Float32
     num_pedn = size(Ai_nn,1)
     #reorder genotypes to get Mg with the same order as Ai_gg
-    Z  = mkmat_incidence_factor(ped.IDs[(num_pedn+1):end],geno.obsID)
-    Mg = Z*geno.genotypes
+    Zgeno = mkmat_incidence_factor(ped.IDs[(num_pedn+1):end],geno.obsID)
     #**********************************************************
     #impute genotypes for non-genotyped inds
     #**********************************************************
@@ -107,35 +136,23 @@ function impute_genotypes(geno,ped,mme,Ai_nn,Ai_ng,df,big_memory=false)
                block22];
     #genotypes are imputed for all individuals in pedigree and aligned to
     #phenotyped individuals by genotype chunks to avoid memory issues.
-    Z              = mkmat_incidence_factor(df[!,1],ped.IDs)  #aligned to phenotypes
-    Zo             = mkmat_incidence_factor(mme.output_ID,ped.IDs) #aligned to outputIDs
+    Zpheno = mkmat_incidence_factor(df[!,1],ped.IDs)  #aligned to phenotypes
+    Zout = mkmat_incidence_factor(mme.output_ID,ped.IDs) #aligned to outputIDs
     if big_memory == false
-        nmarkers       = size(Mg,2)
-        Mpheno         = zeros(length(df[!,1]),nmarkers)
-        Mout           = zeros(length(mme.output_ID),nmarkers)
-        markerperchunk = 1000
-        if nmarkers%markerperchunk == 0
-            nchunks = div(nmarkers,markerperchunk)
-        else
-            nchunks = div(nmarkers,markerperchunk)+1
-        end
-        @showprogress desc="imputing genotypes for non-genotyped individuals" for i=1:nchunks
-            if i != nchunks
-                myrange = (1+(i-1)*markerperchunk):(i*markerperchunk)
-            else
-                myrange = (1+(i-1)*markerperchunk):nmarkers
-            end
-            Mped_chunk        = lhs\(rhs*Mg[:,myrange]) #view
-            Mpheno[:,myrange] = Z*Mped_chunk
-            Mout[:,myrange]   = Zo*Mped_chunk
-        end
+        Mpheno,Mout = _impute_genotypes_in_chunks(
+            geno.genotypes,Zgeno,lhs,rhs,Zpheno,Zout;
+            markerperchunk=1000,
+        )
     else
-         Mpheno = Z*(lhs\(rhs*Mg))
-         Mout   = Zo*(lhs\(rhs*Mg))
+         Mg = Zgeno*geno.genotypes
+         Mpheno = data_type.(Zpheno*(lhs\(rhs*Mg)))
+         Mout   = data_type.(Zout*(lhs\(rhs*Mg)))
     end
 
-    geno.output_genotypes = data_type.(Mout) #make datatype consistant to avoid error here: BLAS.axpy!(oldAlpha-α[j],x,yCorr)
-    geno.genotypes        = data_type.(Mpheno)
+    # Adopt the final matrices directly. Replacing geno.genotypes releases the
+    # object's reference to the observed matrix after chunked imputation.
+    geno.output_genotypes = Mout
+    geno.genotypes        = Mpheno
     geno.obsID            = df[!,1]
     geno.nObs             = length(geno.obsID)
     GC.gc()
