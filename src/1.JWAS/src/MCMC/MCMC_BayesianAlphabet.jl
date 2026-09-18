@@ -60,7 +60,7 @@ function MCMC_BayesianAlphabet(mme,df)
                 Mi.mpRinvm = Mi.stream_backend.xpRinvx
                 Mi.MArray = Mi.MRinvArray = Mi.MpRinvM = false
             else
-                mGibbs    = GibbsMats(Mi.genotypes,invweights,fast_blocks=mme.MCMCinfo.fast_blocks)
+                mGibbs    = GibbsMats(Mi.genotypes,invweights,fast_blocks=fast_block_starts_for(mme.MCMCinfo.fast_blocks, Mi))
                 Mi.mArray,Mi.mRinvArray,Mi.mpRinvm  = mGibbs.xArray,mGibbs.xRinvArray,mGibbs.xpRinvx
                 if fast_blocks != false
                     Mi.MArray  = mGibbs.XArray

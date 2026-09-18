@@ -76,3 +76,45 @@ correlated or overlapping classes.
 For single-trait Annotated BayesC, the marker-specific pi sample file is also
 row-oriented in this version. Its first row contains marker IDs; every later
 row is one retained MCMC iteration and every column is one marker.
+
+## Fast blocks
+
+Shared multiclass models support `fast_blocks=true` or a numeric block size:
+
+```julia
+out = runMCMC(model, phenotypes;
+    fast_blocks=100,
+    chain_length=140_000,
+    burnin=300,
+    independent_blocks=false,
+    inner_outer_diagnostics=true,
+    output_marker_effect_samples=false,
+)
+```
+
+Numeric sizes generate separate block boundaries in each class's local marker
+order. Every marker is included, including short final blocks and classes with
+only one marker. `true` selects `floor(sqrt(nObs))` as the requested block size.
+An explicit vector such as `[1, 3]` is applied in local coordinates to every
+class and must be valid for all classes; it is not a list of source SNP indices.
+For unequal classes, prefer a numeric size.
+
+Classes and their blocks update sequentially using the same residual when
+`independent_blocks=false`. Overlapping memberships keep distinct effects and
+indicators. Genotype blocks remain views; block crossproducts require extra
+memory approximately proportional to the total class memberships times block
+size for classes much larger than a block.
+
+The existing iteration convention is retained: numeric/true settings run
+`floor(chain_length / requested_block_size)` outer iterations. The example runs
+1,400 outer iterations with 300 outer burn-in iterations. Burn-in and output
+frequency are measured in outer iterations. BayesC performs as many inner
+repetitions as the actual width of each block, including during burn-in; short
+blocks therefore receive fewer repetitions. Explicit start vectors do not
+rescale the outer chain length. Choose a chain length that leaves retained
+outer iterations, and assess mixing for class effects and hyperparameters.
+
+Inner/outer diagnostics are accumulated separately for each class. The usual
+outer PIP and class heritability outputs remain available. This does not imply
+a measured speedup: benchmark time and effective samples on your data before
+choosing a production schedule.

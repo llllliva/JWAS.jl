@@ -79,6 +79,21 @@ function validate_fast_block_starts(block_starts::AbstractVector{<:Integer}, nma
     return nothing
 end
 
+# Multiclass setups store starts by term name; single-term setups retain a vector.
+fast_block_starts_for(fast_blocks, Mi) =
+    fast_blocks isa AbstractDict ? fast_blocks[Mi.name] : fast_blocks
+
+function resolve_multiclass_block_starts(terms, specification)
+    starts = Dict()
+    for Mi in terms
+        local_starts = specification isa Integer ?
+            collect(1:specification:Mi.nMarkers) : copy(specification)
+        validate_fast_block_starts(local_starts, Mi.nMarkers)
+        starts[Mi.name] = local_starts
+    end
+    return starts
+end
+
 function resolve_bayesr_fast_blocks(fast_blocks; env=ENV)
     fast_blocks === true || return fast_blocks
 
@@ -445,7 +460,7 @@ function runMCMC(mme::MME,df;
         set_marker_hyperparameters_variances_and_pi(mme; bayesr_gamma=BayesR_gamma)
     end
     ############################################################################
-    #fast blocks #now only work for one geno
+    # Fast blocks: boundaries are local to each genotype term.
     ############################################################################
     if fast_blocks != false
         if fast_blocks === true
@@ -454,7 +469,9 @@ function runMCMC(mme::MME,df;
             block_size = Int(floor(fast_blocks))
         elseif fast_blocks isa AbstractVector{<:Integer}
             block_starts = collect(Int.(fast_blocks))
-            validate_fast_block_starts(block_starts, mme.M[1].nMarkers)
+            for Mi in mme.M
+                validate_fast_block_starts(block_starts, Mi.nMarkers)
+            end
             mme.MCMCinfo.fast_blocks = block_starts
             println("BLOCK STARTS: $(mme.MCMCinfo.fast_blocks)")
             flush(stdout)
@@ -464,9 +481,15 @@ function runMCMC(mme::MME,df;
         end
         if block_size !== false
             block_size >= 1 || error("fast_blocks block size must be at least 1.")
-            mme.MCMCinfo.fast_blocks  = collect(range(1, step=block_size, stop=mme.M[1].nMarkers))
-            length(mme.MCMCinfo.fast_blocks) > 1 || error("fast_blocks block size must create at least two block starts.")
-            mme.MCMCinfo.chain_length = Int(floor(chain_length/(mme.MCMCinfo.fast_blocks[2]-mme.MCMCinfo.fast_blocks[1]))) #number of outer loop
+            if length(mme.M) == 1
+                mme.MCMCinfo.fast_blocks = collect(1:block_size:mme.M[1].nMarkers)
+                length(mme.MCMCinfo.fast_blocks) > 1 || error("fast_blocks block size must create at least two block starts.")
+            else
+                mme.MCMCinfo.fast_blocks = resolve_multiclass_block_starts(mme.M, block_size)
+            end
+            mme.MCMCinfo.chain_length = Int(floor(chain_length / block_size))
+            mme.MCMCinfo.chain_length > mme.MCMCinfo.burnin ||
+                error("fast_blocks requires the outer chain length floor(chain_length/block_size) to exceed burnin.")
             println("BLOCK SIZE: $block_size")
             flush(stdout)
         end
@@ -604,7 +627,7 @@ function runMCMC(mme::MME,df;
             est = estimate_marker_memory(Mi.nObs,Mi.nMarkers;
                                          element_bytes=bytes_per_value,
                                          has_nonunit_weights=has_nonunit_weights,
-                                         block_starts=mme.MCMCinfo.fast_blocks,
+                                         block_starts=fast_block_starts_for(mme.MCMCinfo.fast_blocks, Mi),
                                          storage_mode=Mi.storage_mode)
             geno_name = (Mi.name == false ? "geno" : string(Mi.name))
             if Mi.storage_mode == :stream
