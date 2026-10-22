@@ -33,7 +33,7 @@ or an explicit `--plink-id-map` can be supplied if that is not the ID convention
 
 ```bash
 julia --project=JWAS_raw_phenotype_models \
-  JWAS_raw_phenotype_models/run_pic_jwas_shared_from_bfile.jl \
+  JWAS_raw_phenotype_models/run_pic_jwas_from_bfile.jl \
   --bfile /path/to/LG02 \
   --trait FIP --pheno /path/to/LG02_FIP.txt \
   --train-ids /path/to/LG02.FIP.ALS.train.txt \
@@ -43,8 +43,11 @@ julia --project=JWAS_raw_phenotype_models \
   --outdir results/LG02_FIP_ALS_shared
 ```
 
-The shared wrapper defaults to the paired JWAS path, train-first decoding and
-shared alignment. Its newids are assigned after train-first ordering. All
+The main runner defaults to the paired JWAS path, train-first decoding and
+shared alignment. The prepared-input runner and preparation script use matching
+defaults too. The older shared-wrapper name remains an alias. With omitted
+`--pi`, BayesC uses 0.99 and BayesR uses 0.95,0.02,0.02,0.01. The revised API
+is checked before decoding the large matrix. Newids are assigned after train-first ordering. All
 phenotype rows, source masks, FID/IID maps and split lists follow those newids.
 Do not mix earlier source-order newids with these outputs. Training-only missing
 genotype means are used when decoding BED. Test responses are masked before
