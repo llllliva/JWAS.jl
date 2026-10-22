@@ -75,3 +75,11 @@ benchmark. No production speedup is promised. Measure full-size peak RSS and
 runtime on a scheduled compute-node pilot. The release is dense in-memory, not
 an out-of-core sampler. Additional marker annotations and other model state
 still require memory beyond the single genotype payload.
+
+## Package-only GitHub publication
+
+The published feature branch contains only the JWAS package changes, unit tests,
+package documentation and synthetic benchmark evidence. Application-specific
+PIC runner files and environment/configuration files are not included. External
+runner verification above records earlier integration work, not bundled files.
+The package API and sampling defaults remain opt-in and unchanged by publication.

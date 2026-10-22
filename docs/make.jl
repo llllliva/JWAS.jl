@@ -25,7 +25,7 @@ makedocs(
             "BayesR3 Block Strategy" => "manual/block_bayesc.md",
             "Prototype-to-Production Benchmarking" => "manual/prototype_to_production_benchmarking.md",
             "Memory Usage" => "manual/memory_usage.md",
-            "Shared PIC Genotypes" => "manual/pic_shared_matrix.md",
+            "Shared Dense Genotypes" => "manual/pic_shared_matrix.md",
             "Streaming Genotype Walkthrough" => "manual/streaming_genotype_walkthrough.md",
             "Public" => "manual/public.md",
             "Internals" => "manual/internals.md"

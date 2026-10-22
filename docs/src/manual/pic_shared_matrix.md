@@ -60,6 +60,6 @@ Numeric fast blocks divide nominal chain length by block size in this branch.
 The example runs 2,000 outer iterations, discards 400 outer burn-in iterations,
 and saves 320 draws. These example settings do not establish convergence.
 
-The paired PIC `run_pic_jwas_shared_from_bfile.jl` wrapper performs train-first
-decoding, ID remapping and test-response masking directly from PLINK bfiles,
-never writes a dense genotype matrix, and saves `genotype_storage_report.csv`.
+Application code is responsible for constructing the selected matrix and
+matching ID order before calling this package API. No application-specific
+phenotype loader or job runner is included in this branch.

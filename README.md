@@ -1,5 +1,18 @@
 # JWAS.jl
 
+## Shared dense genotype storage
+
+Opt in with `runMCMC(...; shared_genotypes=true)` to retain one dense genotype
+matrix for training and prediction. Training rows and SNP blocks share its
+storage, while posterior EBVs and PEVs remain available for requested animals.
+Pair this with `get_genotypes(...; copy_genotypes=false, quality_control=false)`.
+The existing alignment behavior remains the default.
+
+Supported initially: one dense genotype term, one trait, BayesC/BayesR,
+contiguous unique training/prediction row selections and unit residual weights.
+See the [shared-storage guide](SHARED_MATRIX_README.md) for the package API,
+constraints, verification and memory accounting.
+
 ## Opt-in no-copy dense matrix input
 
 This version adds `copy_genotypes=false` to `get_genotypes` for workflows that
