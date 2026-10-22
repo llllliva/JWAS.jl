@@ -76,6 +76,10 @@ println()
             include(joinpath(@__DIR__, "unit", "test_shared_dense_multiclass.jl"))
         end
 
+        @testset "PIC Shared Matrix" begin
+            include(joinpath(@__DIR__, "unit", "test_pic_shared_matrix.jl"))
+        end
+
         @testset "Memory Guardrails" begin
             include(joinpath(@__DIR__, "unit", "test_memory_guardrails.jl"))
         end

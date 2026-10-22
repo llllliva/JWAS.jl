@@ -293,12 +293,81 @@ function genotype_row_indices(desired_ids::AbstractVector, genotype_ids::Abstrac
     return rows
 end
 
-function align_genotypes(mme::MME,output_heritability=false,single_step_analysis=false)
+"""Resolve an ordered contiguous row range without materializing genotype data."""
+function contiguous_genotype_rows(desired_ids::AbstractVector, genotype_ids::AbstractVector)
+    length(unique(genotype_ids)) == length(genotype_ids) ||
+        error("shared_genotypes=true requires unique genotype IDs.")
+    isempty(desired_ids) && error("shared_genotypes=true requires a nonempty row selection.")
+    rows = genotype_row_indices(desired_ids, genotype_ids)
+    first_row = first(rows)
+    all(i -> rows[i] == first_row + i - 1, eachindex(rows)) ||
+        error("shared_genotypes=true requires contiguous rows in genotype order, without repeats. Decode training animals first, then test animals; keep phenotype and prediction IDs in that order.")
+    first_row:last(rows)
+end
+
+function validate_shared_genotypes(mme::MME; single_step_analysis=false, RRM=false,
+                                   double_precision=false)
+    mme.M != 0 && length(mme.M) == 1 ||
+        error("shared_genotypes=true currently requires exactly one genotype term.")
+    mme.nModels == 1 || error("shared_genotypes=true currently supports single-trait models only.")
+    single_step_analysis == false && RRM == false ||
+        error("shared_genotypes=true does not support single-step or random regression models.")
+    Mi = only(mme.M)
+    length(unique(Mi.obsID)) == length(Mi.obsID) ||
+        error("shared_genotypes=true requires unique genotype IDs.")
+    Mi.storage_mode == :dense && !Mi.isGRM && Mi.method in ("BayesC", "BayesR") ||
+        error("shared_genotypes=true requires dense marker genotypes for BayesC or BayesR.")
+    expected_type = double_precision ? Float64 : Float32
+    Mi.genotypes isa Matrix{expected_type} ||
+        error("shared_genotypes=true requires an initial Matrix{$expected_type}; match import precision to runMCMC to avoid conversion copies.")
+    nothing
+end
+
+function dense_genotype_parent(matrix::AbstractMatrix)
+    root = matrix
+    while root isa SubArray
+        root = parent(root)
+    end
+    root isa Matrix || error("Genotype storage report expects dense Matrix parents.")
+    root
+end
+
+"""Count actual unique dense parent buffers retained by a genotype term."""
+function genotype_storage_report(Mi::Genotypes)
+    parents = IdDict{Any,Nothing}()
+    function register(matrix)
+        matrix isa AbstractMatrix || return
+        parents[dense_genotype_parent(matrix)] = nothing
+    end
+    register(Mi.genotypes)
+    register(Mi.output_genotypes)
+    blocks = Mi.MArray === false ? () : Mi.MArray
+    for block in blocks
+        register(block)
+    end
+    shared_output = Mi.output_genotypes isa AbstractMatrix &&
+                    dense_genotype_parent(Mi.genotypes) === dense_genotype_parent(Mi.output_genotypes)
+    all_blocks_shared = all(block -> dense_genotype_parent(block) === dense_genotype_parent(Mi.genotypes), blocks)
+    gram_bytes = Mi.MpRinvM === false ? 0 : sum(sizeof, Mi.MpRinvM; init=0)
+    (; backing_matrix_count=length(parents),
+       backing_matrix_bytes=sum(sizeof, keys(parents); init=0),
+       training_rows=size(Mi.genotypes,1), markers=Mi.nMarkers,
+       training_is_view=Mi.genotypes isa SubArray,
+       output_shares_training_parent=shared_output,
+       block_count=length(blocks), all_blocks_share_training=all_blocks_shared,
+       block_gram_bytes=gram_bytes)
+end
+
+function align_genotypes(mme::MME,output_heritability=false,single_step_analysis=false;
+                         shared_genotypes::Bool=false)
     if single_step_analysis==false
         if mme.output_ID != 0
             for Mi in mme.M
                 if mme.output_ID != Mi.obsID
-                    if Mi.genotypes isa SubArray && !Mi.isGRM
+                    if shared_genotypes
+                        output_rows = contiguous_genotype_rows(mme.output_ID, Mi.obsID)
+                        Mi.output_genotypes = view(Mi.genotypes, output_rows, :)
+                    elseif Mi.genotypes isa SubArray && !Mi.isGRM
                         output_rows = genotype_row_indices(mme.output_ID, Mi.obsID)
                         Mi.output_genotypes = view(Mi.genotypes, output_rows, :)
                     else
@@ -322,7 +391,10 @@ function align_genotypes(mme::MME,output_heritability=false,single_step_analysis
         #**********CENTERING?*******************************************************
         if mme.obsID != mme.M[1].obsID
             for Mi in mme.M
-                if Mi.genotypes isa SubArray && !Mi.isGRM
+                if shared_genotypes
+                    phenotype_rows = contiguous_genotype_rows(mme.obsID, Mi.obsID)
+                    genotypes = view(Mi.genotypes, phenotype_rows, :)
+                elseif Mi.genotypes isa SubArray && !Mi.isGRM
                     phenotype_rows = genotype_row_indices(mme.obsID, Mi.obsID)
                     genotypes = view(Mi.genotypes, phenotype_rows, :)
                 else

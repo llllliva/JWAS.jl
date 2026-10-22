@@ -245,6 +245,7 @@ end
   * If `seed`, defaulting to `false`, is provided, a reproducible sequence of numbers will be generated for random number generation.
   * If `big_memory`=true, defaulting to `false`, a machine with  lots of memory is assumed which may speed up the analysis.
   * `fast_blocks` enables block marker updates. It can be `false`, `true`, a numeric block size, or a vector of explicit marker block starts such as `[1, 501, 1201]`.
+  * `shared_genotypes=true` opts one dense single-trait BayesC/BayesR term into contiguous training/output row views. Pair with `get_genotypes(...; copy_genotypes=false, quality_control=false)` and matching precision. Decode train-first; repeated/permuted rows, single-step, RRM and non-unit weights are rejected. The default is `false`.
   * `independent_blocks=false` keeps the exact sequential fast-block sweep. Set `independent_blocks=true` only when `fast_blocks != false` and you explicitly want the approximate mode that updates blocks from a sweep-level residual snapshot before reconciling all block changes.
   * `BayesR_gamma` sets the four BayesR class multipliers in increasing order, including the null class at zero; for example, `[0.0, 0.001, 0.1, 1.0]`. An explicit keyword takes precedence; when omitted, a non-empty comma-separated `BAYESR_GAMMA` environment value is used, otherwise the package default is retained. Custom values currently apply to single-trait BayesR.
   * `BayesR_inner_iterations` optionally sets the number of post-burn-in inner marker-update repetitions per fast-block sweep. The default `false` preserves the calculated legacy rule (`nreps=block_size`); burn-in always uses one repetition. When the keyword is `false`, `BAYESR_INNER_ITERATIONS` may be set to a positive integer in the environment, while missing, `false`, or `auto` retains the calculated default.
@@ -283,6 +284,7 @@ function runMCMC(mme::MME,df;
                 big_memory                      = false,
                 double_precision                = false,
                 fast_blocks                     = false,
+                shared_genotypes::Bool          = false,
                 independent_blocks              = false,
                 BayesR_gamma                    = nothing,
                 BayesR_inner_iterations        = false,
@@ -320,6 +322,9 @@ function runMCMC(mme::MME,df;
         end
     end
     has_bayesr = mme.M != 0 && any(Mi.method == "BayesR" for Mi in mme.M)
+    if shared_genotypes
+        validate_shared_genotypes(mme; single_step_analysis, RRM, double_precision)
+    end
     if has_bayesr
         fast_blocks = resolve_bayesr_fast_blocks(fast_blocks)
         BayesR_inner_iterations =
@@ -595,12 +600,14 @@ function runMCMC(mme::MME,df;
             end
             printstyled("storage=:stream is enabled; genotype alignment is skipped and original ID order is used.\n",bold=false,color=:green)
         else
-            align_genotypes(mme,output_heritability,single_step_analysis)
+            align_genotypes(mme,output_heritability,single_step_analysis; shared_genotypes)
         end
     end
     # initiate Mixed Model Equations and check starting values
     init_mixed_model_equations(mme,df,starting_value)
     if mme.M != 0
+        shared_genotypes && !is_unit_weights(mme.invweights) &&
+            error("shared_genotypes=true currently requires unit residual weights to avoid a weighted genotype copy.")
         for Mi in mme.M
             if Mi.storage_mode == :stream
                 if any(mme.invweights .!= one(eltype(mme.invweights)))
@@ -630,6 +637,8 @@ function runMCMC(mme::MME,df;
                                          block_starts=fast_block_starts_for(mme.MCMCinfo.fast_blocks, Mi),
                                          storage_mode=Mi.storage_mode)
             geno_name = (Mi.name == false ? "geno" : string(Mi.name))
+            retained_extra = shared_genotypes ?
+                max(Int128(genotype_storage_report(Mi).backing_matrix_bytes) - est.bytes_X, Int128(0)) : Int128(0)
             if Mi.storage_mode == :stream
                 context_str =
                     "geno=$geno_name, storage=:stream, nObs=$(Mi.nObs), nMarkers=$(Mi.nMarkers), precision=Float32, "*
@@ -646,11 +655,12 @@ function runMCMC(mme::MME,df;
                     "XpRinvX=$(format_bytes_human(est.bytes_XpRinvX)), "*
                     "xpRinvx=$(format_bytes_human(est.bytes_xpRinvx))"
             end
+            shared_genotypes && (context_str *= ", retained_parent_extra=$(format_bytes_human(retained_extra))")
 
             check_marker_memory_guard!(;
                                        mode=guard_mode,
                                        ratio=memory_guard_ratio,
-                                       estimated_bytes=est.bytes_total,
+                                       estimated_bytes=est.bytes_total + retained_extra,
                                        total_memory_bytes=total_memory_bytes,
                                        context_string=context_str)
         end
