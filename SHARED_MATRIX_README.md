@@ -39,7 +39,7 @@ julia --project=JWAS_raw_phenotype_models \
   --train-ids /path/to/LG02.FIP.ALS.train.txt \
   --test-ids /path/to/LG02.FIP.ALS.test.txt \
   --event-model separate --method BayesC --pi 0.99 \
-  --fast-blocks 100 --chain 200000 --burnin 400 --output-frequency 5 \
+  --fast-blocks 200 --chain 200000 --burnin 500 --output-frequency 1 \
   --outdir results/LG02_FIP_ALS_shared
 ```
 
@@ -59,7 +59,7 @@ is automatic. For BayesR use `--method BayesR --pi 0.95,0.02,0.02,0.01`.
 Use `--fast-blocks false` for ordinary updates. Use one fresh process per model.
 
 Numeric fast blocks still divide nominal chain length by block size. The
-example runs 2000 outer iterations, discards 400 outer iterations and saves 320
+example runs 1000 outer iterations, discards 500 outer iterations and saves 500
 draws. It is a pilot schedule, not a convergence guarantee. Ordinary updates
 instead run all 200000 outer iterations; reconsider burn-in and runtime when
 switching samplers.
@@ -77,7 +77,7 @@ For A selected animals, P SNPs and block size B, main Float32 payload is about
 `4*P*A + 4*P*B` bytes; the second term is the block cross-product cache. Model,
 marker, annotation and Julia state still add RAM.
 
-At 1.1M SNPs and block size 100, the conservative provisional per-job requests
+At 1.1M SNPs and block size 200, the conservative provisional per-job requests
 below include an 8 GiB allowance, 30% headroom and upward 32G rounding. They
 use local audited animal counts, before fresh FAM matching. Here ALS and 5LS
 have identical train+test totals, so requests match between splits.
