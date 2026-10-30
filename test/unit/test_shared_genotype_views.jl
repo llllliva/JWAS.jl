@@ -68,6 +68,10 @@ function shared_genotype_case(shared,method,fast,seed; annotated=false,precision
     @test all(ismissing,ph.y[setdiff(1:n,selected_train)])
     ebv = CSV.read(joinpath(outdir,"EBV_y.txt"),DataFrame;types=Dict(:ID=>String))
     marker = timing.value["marker effects shared_genotype_test_genotypes"]
+    @test nrow(ebv) == length(prediction_rows)
+    @test Set(String.(ebv.ID)) == Set(ids[prediction_rows])
+    @test nrow(marker) == p
+    @test Set(string.(marker.Marker_ID)) == Set(markers)
     @test length(readlines(joinpath(outdir,"MCMC_samples_residual_variance.txt")))-1 == fld(outer-burnin,freq)
     @test all(isfinite,ebv.EBV) && all(isfinite,ebv.PEV)
     return (;ebv,marker,report,timing,model,outdir)
