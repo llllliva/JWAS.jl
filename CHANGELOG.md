@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-10-30
+
+### Changed
+
+- Matrix input defaults to `copy_genotypes=false`: matching-precision dense
+  matrices are adopted and may be mutated by preprocessing. Use
+  `copy_genotypes=true` to preserve input or permit precision conversion.
+- `shared_genotypes=true` is the default for marker analyses. Contiguous
+  training/prediction rows and SNP blocks share one parent for dense single-trait
+  BayesC/BayesR. Unsupported models/layouts must use `shared_genotypes=false`.
+  Conventional no-marker analyses are unaffected; import ownership for files,
+  DataFrames and streaming data is unchanged.
+- Dense SNP blocks and diagonal products avoid unnecessary copies. Sequential
+  and independent BayesC/BayesR block residual updates use precision-matched
+  BLAS multipliers. Existing annotation methods and sampling schedules are retained.
+
 ## 2026-05-01
 
 ### Added

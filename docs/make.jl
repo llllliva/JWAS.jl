@@ -23,6 +23,7 @@ makedocs(
             "Structural Equation Model (SEM)" => "manual/sem.md",
             "BayesR3 Block Strategy" => "manual/block_bayesc.md",
             "Prototype-to-Production Benchmarking" => "manual/prototype_to_production_benchmarking.md",
+            "Shared Genotype Storage" => "manual/shared_genotype_views.md",
             "Memory Usage" => "manual/memory_usage.md",
             "Streaming Genotype Walkthrough" => "manual/streaming_genotype_walkthrough.md",
             "Public" => "manual/public.md",

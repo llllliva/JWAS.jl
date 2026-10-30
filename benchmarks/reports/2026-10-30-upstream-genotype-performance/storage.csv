@@ -1,0 +1,9 @@
+method,seed,block,copied_bytes,shared_bytes,copied_parents,shared_parents,max_ebv_difference,max_marker_difference
+BayesC,73,0,230272,131584,2,1,0.0,0.0
+BayesC,73,20,230272,131584,2,1,0.0,0.0
+BayesC,123,0,230272,131584,2,1,0.0,0.0
+BayesC,123,20,230272,131584,2,1,0.0,0.0
+BayesR,73,0,230272,131584,2,1,0.0,0.0
+BayesR,73,20,230272,131584,2,1,0.0,0.0
+BayesR,123,0,230272,131584,2,1,0.0,0.0
+BayesR,123,20,230272,131584,2,1,0.0,0.0
