@@ -181,7 +181,7 @@ function BayesABC_block!(XArray,xpRinvx,
         @views begin
             αold_view = view(αold_block,1:block_size)
             αold_view .-= α[block_range]
-            mul!(yCorr,XArray[i],αold_view,1.0,1.0)
+            mul!(yCorr, XArray[i], αold_view, one(eltype(yCorr)), one(eltype(yCorr)))
         end
         start_pos += block_size
     end
@@ -249,7 +249,7 @@ function BayesABC_block_independent!(XArray,xpRinvx,
     end
 
     for i in 1:nblocks
-        mul!(yCorr,XArray[i],block_deltas[i],1.0,1.0)
+        mul!(yCorr, XArray[i], block_deltas[i], one(eltype(yCorr)), one(eltype(yCorr)))
     end
     return nothing
 end
