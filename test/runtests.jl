@@ -68,6 +68,7 @@ println()
     # UNIT TESTS (Always run - fast feedback)
     # ========================================================================
     @testset "Unit Tests" begin
+        include(joinpath(@__DIR__, "unit", "test_genotype_matrix_ownership.jl"))
         @testset "Memory Guardrails" begin
             include(joinpath(@__DIR__, "unit", "test_memory_guardrails.jl"))
         end
