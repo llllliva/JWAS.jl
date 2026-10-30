@@ -130,7 +130,7 @@ end
                                                     output_folder="guardrail_error_mode",
                                                     seed=123,
                                                     memory_guard=:error,
-                                                    memory_guard_ratio=1e-12)
+                                                    memory_guard_ratio=1e-12, shared_genotypes=false)
             end
 
             @testset "runMCMC proceeds in :off mode with same threshold" begin
@@ -144,7 +144,7 @@ end
                                  output_folder="guardrail_off_mode",
                                  seed=123,
                                  memory_guard=:off,
-                                 memory_guard_ratio=1e-12)
+                                 memory_guard_ratio=1e-12, shared_genotypes=false)
                 @test haskey(output, "location parameters")
                 ids_from_file = vec(string.(readdlm(joinpath("guardrail_off_mode", "IDs_for_individuals_with_genotypes.txt"))))
                 @test ids_from_file == original_genotype_ids
@@ -161,7 +161,7 @@ end
                                  output_folder=outdir,
                                  seed=123,
                                  memory_guard=:off,
-                                 fast_blocks=true)
+                                 fast_blocks=true, shared_genotypes=false)
                 @test haskey(output, "marker effects geno")
                 samples_file = joinpath(outdir, "MCMC_samples_residual_variance.txt")
                 @test isfile(samples_file)

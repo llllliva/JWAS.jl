@@ -18,7 +18,7 @@ R = [1.0 0.5; 0.5 1.0]
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_bayesc",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -37,7 +37,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_rrblup",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -55,7 +55,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_ped",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "polygenic effects covariance matrix")
     @test haskey(output, "location parameters")
@@ -75,7 +75,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_iid",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")

@@ -14,7 +14,7 @@ using Test, JWAS, DataFrames, CSV, JWAS.Datasets
         @test_throws ErrorException runMCMC(model, phenotypes,
                                            chain_length=10,
                                            output_folder="test_invalid_method",
-                                           seed=123)
+                                           seed=123, shared_genotypes=false)
         isdir("test_invalid_method") && rm("test_invalid_method", recursive=true)
     end
 
@@ -24,7 +24,7 @@ using Test, JWAS, DataFrames, CSV, JWAS.Datasets
                                            chain_length=10,
                                            single_step_analysis=true,
                                            output_folder="test_ss_no_geno",
-                                           seed=123)
+                                           seed=123, shared_genotypes=false)
         isdir("test_ss_no_geno") && rm("test_ss_no_geno", recursive=true)
     end
 
@@ -35,7 +35,7 @@ using Test, JWAS, DataFrames, CSV, JWAS.Datasets
                                            chain_length=10,
                                            output_samples_frequency=0,
                                            output_folder="test_freq_zero",
-                                           seed=123)
+                                           seed=123, shared_genotypes=false)
         isdir("test_freq_zero") && rm("test_freq_zero", recursive=true)
     end
 

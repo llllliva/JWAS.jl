@@ -21,7 +21,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_bayesb",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "marker effects geno")
     @test haskey(output, "location parameters")
@@ -43,7 +43,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_bayesl",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "marker effects geno")
     @test haskey(output, "location parameters")
@@ -64,7 +64,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_gblup",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -86,7 +86,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_constraint",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -109,7 +109,7 @@ end
                     output_samples_frequency=10,
                     missing_phenotypes=true,
                     output_folder="test_missing_pheno",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -131,7 +131,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_pi_est",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "pi_geno")
     @test haskey(output, "marker effects geno")
@@ -151,7 +151,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_est_scale",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     rm("test_est_scale", recursive=true)
@@ -174,7 +174,7 @@ end
                     outputEBV=true,
                     output_heritability=true,
                     output_folder="test_mt_ebv",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "EBV_y1")
     @test haskey(output, "EBV_y2")
@@ -196,7 +196,7 @@ end
                     output_samples_frequency=10,
                     heterogeneous_residuals=true,
                     output_folder="test_het_res",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     rm("test_het_res", recursive=true)
@@ -215,7 +215,7 @@ end
                     output_samples_frequency=10,
                     double_precision=true,
                     output_folder="test_double_prec",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     rm("test_double_prec", recursive=true)

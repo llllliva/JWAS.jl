@@ -330,7 +330,7 @@ end
                 outputEBV=false,
                 output_heritability=false,
                 seed=2026,
-            )
+            shared_genotypes=false)
 
             @test model.M[1].π isa AbstractVector
             @test nrow(output["pi_plain_geno"]) == 1
@@ -372,7 +372,7 @@ end
                 output_samples_frequency=10,
                 printout_frequency=31,
                 seed=2026,
-            )
+            shared_genotypes=false)
 
             @test model.M[1].π isa AbstractVector
             @test length(model.M[1].π) == model.M[1].nMarkers
@@ -424,7 +424,7 @@ end
                 printout_frequency=31,
                 seed=2026,
                 fast_blocks=true,
-            )
+            shared_genotypes=false)
 
             @test model.M[1].π isa AbstractVector
             @test length(model.M[1].π) == model.M[1].nMarkers
@@ -483,7 +483,7 @@ end
                 output_heritability=false,
                 seed=2026,
                 memory_guard=:off,
-            )
+            shared_genotypes=false)
 
             @test model.M[1].π isa AbstractVector
             @test length(model.M[1].π) == model.M[1].nMarkers

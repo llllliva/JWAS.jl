@@ -28,7 +28,7 @@ end
             @testset "fast_blocks is rejected" begin
                 global geno = get_genotypes(prefix, 1.0; method="BayesC", storage=:stream)
                 model = build_model("y1 = intercept + geno", 1.0)
-                @test_throws ErrorException runMCMC(model, phenotypes;
+                @test_throws ErrorException runMCMC(model, phenotypes; shared_genotypes=false,
                                                     chain_length=20,
                                                     burnin=5,
                                                     output_samples_frequency=5,
@@ -46,7 +46,7 @@ end
                                                 weights=Float32[1.0, 2.0, 1.0, 1.0])
                 global geno = get_genotypes(prefix, 1.0; method="BayesC", storage=:stream)
                 model = build_model("y1 = intercept + geno", 1.0)
-                @test_throws ErrorException runMCMC(model, phenotypes_weighted;
+                @test_throws ErrorException runMCMC(model, phenotypes_weighted; shared_genotypes=false,
                                                     chain_length=20,
                                                     burnin=5,
                                                     output_samples_frequency=5,
@@ -64,7 +64,7 @@ end
                                      y2=Float32[0.1, 0.2, -0.1, 0.3])
                 global geno = get_genotypes(prefix, [1.0 0.0; 0.0 1.0]; method="BayesC", storage=:stream)
                 model_mt = build_model("y1 = intercept + geno\ny2 = intercept + geno", [1.0 0.0; 0.0 1.0])
-                @test_throws ErrorException runMCMC(model_mt, pheno_mt;
+                @test_throws ErrorException runMCMC(model_mt, pheno_mt; shared_genotypes=false,
                                                     chain_length=20,
                                                     burnin=5,
                                                     output_samples_frequency=5,
@@ -78,7 +78,7 @@ end
             @testset "double_precision is rejected" begin
                 global geno = get_genotypes(prefix, 1.0; method="BayesC", storage=:stream)
                 model = build_model("y1 = intercept + geno", 1.0)
-                @test_throws ErrorException runMCMC(model, phenotypes;
+                @test_throws ErrorException runMCMC(model, phenotypes; shared_genotypes=false,
                                                     chain_length=20,
                                                     burnin=5,
                                                     output_samples_frequency=5,
@@ -95,7 +95,7 @@ end
                                                 y1=Float32[1.0, -0.2, 0.5, -0.8])
                 global geno = get_genotypes(prefix, 1.0; method="BayesC", storage=:stream)
                 model = build_model("y1 = intercept + geno", 1.0)
-                @test_throws ErrorException runMCMC(model, phenotypes_repeated;
+                @test_throws ErrorException runMCMC(model, phenotypes_repeated; shared_genotypes=false,
                                                     chain_length=20,
                                                     burnin=5,
                                                     output_samples_frequency=5,
@@ -110,7 +110,7 @@ end
                 global geno = get_genotypes(prefix, 1.0; method="BayesC", storage=:stream)
                 model = build_model("y1 = intercept + geno", 1.0)
                 outputEBV(model, ["a4", "a4", "a2"])
-                @test_throws ErrorException runMCMC(model, phenotypes;
+                @test_throws ErrorException runMCMC(model, phenotypes; shared_genotypes=false,
                                                     chain_length=20,
                                                     burnin=5,
                                                     output_samples_frequency=5,

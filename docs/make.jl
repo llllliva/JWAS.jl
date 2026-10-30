@@ -20,6 +20,7 @@ makedocs(
             "Structural Equation Model (SEM)" => "manual/sem.md",
             "Block BayesC" => "manual/block_bayesc.md",
             "Benchmark" => "manual/benchmark.md",
+            "Shared Genotype Storage" => "manual/shared_genotype_views.md",
             "Memory Usage" => "manual/memory_usage.md",
             "Streaming Genotype Walkthrough" => "manual/streaming_genotype_walkthrough.md",
             "Public" => "manual/public.md",

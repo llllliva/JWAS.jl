@@ -45,7 +45,7 @@ phenotypes[!, :litter] = string.(phenotypes[!, :litter])
                              output_samples_frequency=50,
                              output_folder=outdir,
                              printout_frequency=500,
-                             seed=314)
+                             seed=314, shared_genotypes=false)
 
             # Output structure checks
             @test haskey(output, "location parameters")
@@ -123,7 +123,7 @@ end
                              printout_frequency=500,
                              single_step_analysis=true,
                              pedigree=pedigree,
-                             seed=314)
+                             seed=314, shared_genotypes=false)
 
             # Output structure checks
             @test haskey(output, "location parameters")
@@ -164,7 +164,7 @@ end
                      output_samples_frequency=50,
                      output_folder=outdir,
                      printout_frequency=500,
-                     seed=314)
+                     seed=314, shared_genotypes=false)
 
     # Output structure checks
     @test haskey(output, "location parameters")
@@ -201,7 +201,7 @@ end
                      output_samples_frequency=50,
                      output_folder=outdir,
                      printout_frequency=500,
-                     seed=314)
+                     seed=314, shared_genotypes=false)
 
     # Output structure checks
     @test haskey(output, "location parameters")
@@ -239,7 +239,7 @@ end
                      output_samples_frequency=50,
                      output_folder=outdir,
                      printout_frequency=500,
-                     seed=314)
+                     seed=314, shared_genotypes=false)
 
     # Run GWAS on marker effect samples
     gwas_result = GWAS(joinpath(outdir, "MCMC_samples_marker_effects_geno_trait1.txt"))
@@ -262,12 +262,12 @@ end
     global geno = get_genotypes(genofile, G, header=true, separator=',', method="RR-BLUP")
     model1 = build_model("trait1 = intercept + geno", 1.0)
     out1 = runMCMC(model1, phenotypes, chain_length=200,
-                   output_folder="repro1", printout_frequency=500, seed=999)
+                   output_folder="repro1", printout_frequency=500, seed=999, shared_genotypes=false)
 
     global geno = get_genotypes(genofile, G, header=true, separator=',', method="RR-BLUP")
     model2 = build_model("trait1 = intercept + geno", 1.0)
     out2 = runMCMC(model2, phenotypes, chain_length=200,
-                   output_folder="repro2", printout_frequency=500, seed=999)
+                   output_folder="repro2", printout_frequency=500, seed=999, shared_genotypes=false)
 
     @test out1["residual variance"][1, :Estimate] ≈
           out2["residual variance"][1, :Estimate] atol=1e-10
