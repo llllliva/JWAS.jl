@@ -174,7 +174,8 @@ function BayesABC_block!(XArray,xpRinvx,
         @views begin
             αold_view = view(αold_block,1:block_size)
             αold_view .-= α[block_range]
-            mul!(yCorr,XArray[i],αold_view,1.0,1.0)
+            # Match residual precision so Float32 can use the BLAS matvec path.
+            mul!(yCorr,XArray[i],αold_view,one(eltype(yCorr)),one(eltype(yCorr)))
         end
         start_pos += block_size
     end
