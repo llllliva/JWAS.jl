@@ -7,7 +7,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
 
 @testset "outputEBV and EBV results" begin
     @testset "EBV output with genotypes" begin
-        global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+        global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
         model = build_model("y1 = intercept + geno", 1.0)
         outputEBV(model, geno.obsID)
 
@@ -17,7 +17,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
                         output_samples_frequency=10,
                         outputEBV=true,
                         output_folder="test_ebv_output",
-                        seed=123)
+                        seed=123; shared_genotypes=false)
 
         @test haskey(output, "EBV_y1")
         ebv_df = output["EBV_y1"]
@@ -31,7 +31,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
     end
 
     @testset "EBV output with heritability" begin
-        global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP")
+        global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP"; copy_genotypes=true)
         model = build_model("y1 = intercept + geno", 1.0)
 
         output = runMCMC(model, phenotypes,
@@ -41,7 +41,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
                         outputEBV=true,
                         output_heritability=true,
                         output_folder="test_ebv_h2",
-                        seed=123)
+                        seed=123; shared_genotypes=false)
 
         @test haskey(output, "EBV_y1")
         @test haskey(output, "heritability")
@@ -56,7 +56,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
 end
 
 @testset "outputMCMCsamples for location parameters" begin
-    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
     outputMCMCsamples(model, "intercept")
 
@@ -64,7 +64,7 @@ end
                     chain_length=50,
                     output_samples_frequency=10,
                     output_folder="test_mcmc_samples",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test isfile("test_mcmc_samples/MCMC_samples_y1.intercept.txt")
     rm("test_mcmc_samples", recursive=true)

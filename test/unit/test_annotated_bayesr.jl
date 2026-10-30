@@ -15,7 +15,7 @@ using Random
         err = try
             runMCMC(
                 model,
-                phenotypes;
+                phenotypes; shared_genotypes=false,
                 chain_length=10,
                 burnin=0,
                 output_samples_frequency=5,
@@ -38,7 +38,7 @@ using Random
         annotations = rand(Float64, 5, 2)
         start_pi = Float64[0.95, 0.03, 0.015, 0.005]
         geno = get_genotypes(
-            genofile, 1.0;
+            genofile, 1.0; copy_genotypes=true,
             method="BayesR",
             annotations=annotations,
             Pi=start_pi,
@@ -77,7 +77,7 @@ using Random
                 )
                 err_stream = try
                     global annotated_bayesr_stream = get_genotypes(
-                        prefix, 1.0;
+                        prefix, 1.0; copy_genotypes=true,
                         method="BayesR",
                         storage=:stream,
                         annotations=reshape(rand(Float64, 5, 2), 5, 2),
@@ -114,7 +114,7 @@ using Random
                 err_mt_stream = try
                     get_genotypes(
                         prefix,
-                        [1.0 0.2; 0.2 1.0];
+                        [1.0 0.2; 0.2 1.0]; copy_genotypes=true,
                         method="BayesR",
                         storage=:stream,
                         annotations=rand(Float64, 5, 2),
@@ -129,7 +129,7 @@ using Random
 
         begin
             global annotated_bayesr_rrm = get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 method="BayesR",
                 annotations=annotations,
                 separator=',',
@@ -148,7 +148,7 @@ using Random
             )
             global annotated_bayesr_mt_rrm = get_genotypes(
                 genofile,
-                [1.0 0.2; 0.2 1.0];
+                [1.0 0.2; 0.2 1.0]; copy_genotypes=true,
                 method="BayesR",
                 annotations=annotations,
                 separator=',',
@@ -166,7 +166,7 @@ using Random
             err_three_trait = try
                 global annotated_bayesr_three_trait = get_genotypes(
                     genofile,
-                    [1.0 0.2 0.1; 0.2 1.0 0.3; 0.1 0.3 1.0];
+                    [1.0 0.2 0.1; 0.2 1.0 0.3; 0.1 0.3 1.0]; copy_genotypes=true,
                     method="BayesR",
                     annotations=annotations,
                     separator=',',
@@ -193,7 +193,7 @@ using Random
             )
             global annotated_bayesr_constraint = get_genotypes(
                 genofile,
-                [1.0 0.2; 0.2 1.0];
+                [1.0 0.2; 0.2 1.0]; copy_genotypes=true,
                 method="BayesR",
                 annotations=annotations,
                 separator=',',
@@ -213,7 +213,7 @@ using Random
         annotations = rand(Float64, 5, 2)
         global annotated_bayesr_mt = get_genotypes(
             genofile,
-            [1.0 0.25; 0.25 1.0];
+            [1.0 0.25; 0.25 1.0]; copy_genotypes=true,
             method="BayesR",
             annotations=annotations,
             separator=',',
@@ -237,7 +237,7 @@ using Random
     @testset "multi-trait BayesR genetic2marker uses class scales" begin
         global annotated_bayesr_g = get_genotypes(
             genofile,
-            [2.0 0.4; 0.4 1.5];
+            [2.0 0.4; 0.4 1.5]; copy_genotypes=true,
             method="BayesR",
             annotations=rand(Float64, 5, 2),
             separator=',',
@@ -261,7 +261,7 @@ using Random
 
         err_p3 = try
             get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 method="BayesR",
                 Pi=Float64[0.95, 0.03, 0.02, 0.0],
                 annotations=annotations,
@@ -277,7 +277,7 @@ using Random
 
         err_p2 = try
             get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 method="BayesR",
                 Pi=Float64[0.95, 0.0, 0.0, 0.05],
                 annotations=annotations,
@@ -298,7 +298,7 @@ using Random
 
         Random.seed!(2026)
         geno_a = get_genotypes(
-            genofile, 1.0;
+            genofile, 1.0; copy_genotypes=true,
             method="BayesR",
             annotations=annotations,
             Pi=start_pi,
@@ -308,7 +308,7 @@ using Random
 
         Random.seed!(2027)
         geno_b = get_genotypes(
-            genofile, 1.0;
+            genofile, 1.0; copy_genotypes=true,
             method="BayesR",
             annotations=annotations,
             Pi=start_pi,
@@ -324,7 +324,7 @@ using Random
     @testset "initialized BayesR annotation container shape" begin
         annotations = rand(Float64, 5, 2)
         geno = get_genotypes(
-            genofile, 1.0;
+            genofile, 1.0; copy_genotypes=true,
             method="BayesR",
             annotations=annotations,
             separator=',',
@@ -372,7 +372,7 @@ using Random
     @testset "BayesR annotation prior refresh builds 4-class snp_pi" begin
         annotations = rand(Float64, 5, 2)
         geno = get_genotypes(
-            genofile, 1.0;
+            genofile, 1.0; copy_genotypes=true,
             method="BayesR",
             annotations=annotations,
             separator=',',
@@ -484,7 +484,7 @@ using Random
         mktempdir() do tmpdir
             cd(tmpdir) do
                 global annotated_bayesr_dense = get_genotypes(
-                    genofile, 1.0;
+                    genofile, 1.0; copy_genotypes=true,
                     separator=',',
                     method="BayesR",
                     quality_control=false,
@@ -501,7 +501,7 @@ using Random
                     seed=2026,
                     outputEBV=false,
                     output_heritability=false,
-                )
+                ; shared_genotypes=false)
 
                 @test haskey(output, "marker effects annotated_bayesr_dense")
                 @test "Model_Frequency" in names(output["marker effects annotated_bayesr_dense"])
@@ -527,7 +527,7 @@ using Random
         mktempdir() do tmpdir
             cd(tmpdir) do
                 global annotated_bayesr_fast = get_genotypes(
-                    genofile, 1.0;
+                    genofile, 1.0; copy_genotypes=true,
                     separator=',',
                     method="BayesR",
                     quality_control=false,
@@ -545,7 +545,7 @@ using Random
                     fast_blocks=true,
                     outputEBV=false,
                     output_heritability=false,
-                )
+                ; shared_genotypes=false)
 
                 @test haskey(output, "marker effects annotated_bayesr_fast")
                 @test "Model_Frequency" in names(output["marker effects annotated_bayesr_fast"])
@@ -570,7 +570,7 @@ using Random
         mktempdir() do tmpdir
             cd(tmpdir) do
                 global annotated_bayesr_fast_independent = get_genotypes(
-                    genofile, 1.0;
+                    genofile, 1.0; copy_genotypes=true,
                     separator=',',
                     method="BayesR",
                     quality_control=false,
@@ -589,7 +589,7 @@ using Random
                     independent_blocks=true,
                     outputEBV=false,
                     output_heritability=false,
-                )
+                ; shared_genotypes=false)
 
                 @test haskey(output, "marker effects annotated_bayesr_fast_independent")
                 @test "Model_Frequency" in names(output["marker effects annotated_bayesr_fast_independent"])

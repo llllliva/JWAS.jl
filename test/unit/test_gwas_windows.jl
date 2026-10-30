@@ -7,7 +7,7 @@ mapfile = Datasets.dataset("map.txt", dataset_name="demo_7animals")
 phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
 
 # Run a short MCMC to generate marker effect samples
-global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
 model = build_model("y1 = intercept + geno", 1.0)
 outputEBV(model, geno.obsID)
 
@@ -17,7 +17,7 @@ output = runMCMC(model, phenotypes,
                 output_samples_frequency=10,
                 outputEBV=true,
                 output_folder="test_gwas_win",
-                seed=123)
+                seed=123; shared_genotypes=false)
 
 marker_file = "test_gwas_win/MCMC_samples_marker_effects_geno_y1.txt"
 

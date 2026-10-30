@@ -12,14 +12,14 @@ using Test, JWAS, DataFrames, CSV, JWAS.Datasets
     @testset "BayesC accepts CSV inline-string IDs" begin
         output_folder = "test_single_step_inline_ids"
         isdir(output_folder) && rm(output_folder, recursive=true, force=true)
-        global genotypes = get_genotypes(genofile, separator=',', method="BayesC")
+        global genotypes = get_genotypes(genofile, separator=',', method="BayesC"; copy_genotypes=true)
         model = build_model("y1 = intercept + genotypes")
 
         local output
         try
             output = runMCMC(
                 model,
-                phenotypes;
+                phenotypes; shared_genotypes=false,
                 single_step_analysis=true,
                 pedigree=pedigree,
                 chain_length=2,
@@ -41,15 +41,15 @@ using Test, JWAS, DataFrames, CSV, JWAS.Datasets
     @testset "BayesC accepts multiple genotype categories" begin
         output_folder = "test_single_step_multiclass"
         isdir(output_folder) && rm(output_folder, recursive=true, force=true)
-        global geno1 = get_genotypes(genofile, separator=',', method="BayesC")
-        global geno2 = get_genotypes(genofile, separator=',', method="BayesC")
+        global geno1 = get_genotypes(genofile, separator=',', method="BayesC"; copy_genotypes=true)
+        global geno2 = get_genotypes(genofile, separator=',', method="BayesC"; copy_genotypes=true)
         model = build_model("y1 = intercept + geno1 + geno2")
 
         local output
         try
             output = runMCMC(
                 model,
-                phenotypes;
+                phenotypes; shared_genotypes=false,
                 single_step_analysis=true,
                 pedigree=pedigree,
                 chain_length=2,
@@ -89,7 +89,7 @@ using Test, JWAS, DataFrames, CSV, JWAS.Datasets
             isdir(output_folder) && rm(output_folder, recursive=true, force=true)
             global annotated_ss_geno1 = get_genotypes(
                 genofile,
-                1.0;
+                1.0; copy_genotypes=true,
                 separator=',',
                 method=method,
                 quality_control=false,
@@ -97,7 +97,7 @@ using Test, JWAS, DataFrames, CSV, JWAS.Datasets
             )
             global annotated_ss_geno2 = get_genotypes(
                 genofile,
-                1.0;
+                1.0; copy_genotypes=true,
                 separator=',',
                 method=method,
                 quality_control=false,
@@ -109,7 +109,7 @@ using Test, JWAS, DataFrames, CSV, JWAS.Datasets
             try
                 output = runMCMC(
                     model,
-                    phenotypes;
+                    phenotypes; shared_genotypes=false,
                     single_step_analysis=true,
                     pedigree=pedigree,
                     chain_length=2,

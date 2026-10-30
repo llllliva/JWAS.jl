@@ -23,7 +23,7 @@ const BAYESR_BLOCK_DISPATCH_INSTALLED = Ref(false)
 function bayesr_run_error(model, phenotypes; kwargs...)
     outdir = tempname()
     err = try
-        runMCMC(model, phenotypes;
+        runMCMC(model, phenotypes; shared_genotypes=false,
                 chain_length=10,
                 burnin=0,
                 output_samples_frequency=5,
@@ -64,7 +64,7 @@ end
         global geno = get_genotypes(genofile, 1.0, separator=',',
                                     method="BayesR",
                                     Pi=Float64[0.95, 0.03, 0.015, 0.005],
-                                    estimatePi=true)
+                                    estimatePi=true; copy_genotypes=true)
         model = build_model("y1 = intercept + geno", 1.0)
         @test geno.method == "BayesR"
         @test model.nModels == 1
@@ -74,7 +74,7 @@ end
         global geno = get_genotypes(genofile, 1.0, separator=',',
                                     method="BayesR",
                                     Pi=Float64[0.95, 0.05, 0.0],
-                                    estimatePi=true)
+                                    estimatePi=true; copy_genotypes=true)
         model = build_model("y1 = intercept + geno", 1.0)
         err = bayesr_run_error(model, phenotypes)
         @test err isa ErrorException
@@ -85,7 +85,7 @@ end
         global geno = get_genotypes(genofile, 1.0, separator=',',
                                     method="BayesR",
                                     Pi=Float64[0.95, 0.03, 0.015, 0.005],
-                                    estimatePi=true)
+                                    estimatePi=true; copy_genotypes=true)
         model = build_model("y1 = intercept + geno", 1.0)
         err = bayesr_run_error(model, phenotypes; fast_blocks=true)
         @test !(err isa ErrorException &&
@@ -97,10 +97,10 @@ end
                                     method="BayesR",
                                     Pi=Float64[0.95, 0.03, 0.015, 0.005],
                                     estimatePi=false,
-                                    estimate_variance=false)
+                                    estimate_variance=false; copy_genotypes=true)
         model = build_model("y1 = intercept + geno", 1.0)
         outdir = tempname()
-        runMCMC(model, phenotypes;
+        runMCMC(model, phenotypes; shared_genotypes=false,
                 chain_length=10,
                 burnin=0,
                 output_samples_frequency=5,
@@ -120,12 +120,12 @@ end
         global geno = get_genotypes(genofile, 1.0, separator=',',
                                     method="BayesR",
                                     Pi=start_pi,
-                                    estimatePi=true)
+                                    estimatePi=true; copy_genotypes=true)
         @test geno.π !== start_pi
 
         model = build_model("y1 = intercept + geno", 1.0)
         outdir = tempname()
-        runMCMC(model, phenotypes;
+        runMCMC(model, phenotypes; shared_genotypes=false,
                 chain_length=10,
                 burnin=0,
                 output_samples_frequency=5,
@@ -156,7 +156,7 @@ end
                                                               center=true)
                     local stream_pheno = DataFrame(ID=["a1", "a2", "a3", "a4"],
                                                    y1=Float32[1.0, -0.2, 0.5, -0.8])
-                    global geno = get_genotypes(prefix, 1.0;
+                    global geno = get_genotypes(prefix, 1.0; copy_genotypes=true,
                                                 method="BayesR",
                                                 storage=:stream,
                                                 Pi=Float64[0.95, 0.03, 0.015, 0.005],
@@ -178,7 +178,7 @@ end
                                         separator=',',
                                         method="BayesR",
                                         Pi=Float64[0.95, 0.03, 0.015, 0.005],
-                                        estimatePi=true)
+                                        estimatePi=true; copy_genotypes=true)
             model = build_model("y1 = intercept + geno\ny2 = intercept + geno",
                                 [1.0 0.0; 0.0 1.0])
             err = bayesr_run_error(model, phenotypes_mt)
@@ -190,7 +190,7 @@ end
             global geno = get_genotypes(genofile, 1.0, separator=',',
                                         method="BayesR",
                                         Pi=Float64[0.95, 0.03, 0.015, 0.005],
-                                        estimatePi=true)
+                                        estimatePi=true; copy_genotypes=true)
             model = build_model("y1 = intercept + geno", 1.0)
             err = bayesr_run_error(model, phenotypes; RRM=ones(Float64, 1, 1))
             @test err isa ErrorException
@@ -284,7 +284,7 @@ end
                                 method="BayesR",
                                 Pi=Float64[0.95, 0.03, 0.015, 0.005],
                                 estimatePi=false,
-                                estimate_variance=true)
+                                estimate_variance=true; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
     outdir = tempname()
 
@@ -302,7 +302,7 @@ end
                                    printout_model_info=true,
                                    outputEBV=false,
                                    output_heritability=false,
-                                   fast_blocks=false)
+                                   fast_blocks=false; shared_genotypes=false)
         end
     end
     printed = read(outpath, String)
@@ -322,7 +322,7 @@ end
                                 method="BayesR",
                                 Pi=Float64[0.95, 0.03, 0.015, 0.005],
                                 estimatePi=true,
-                                estimate_variance=true)
+                                estimate_variance=true; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
     outdir = tempname()
     output = runMCMC(model, phenotypes,
@@ -334,7 +334,7 @@ end
                      printout_model_info=false,
                      outputEBV=false,
                      output_heritability=false,
-                     fast_blocks=false)
+                     fast_blocks=false; shared_genotypes=false)
 
     @test haskey(output, "pi_geno")
     @test nrow(output["pi_geno"]) == 4
@@ -348,7 +348,7 @@ end
                                 method="BayesR",
                                 Pi=Float64[0.95, 0.03, 0.015, 0.005],
                                 estimatePi=true,
-                                estimate_variance=true)
+                                estimate_variance=true; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
     outdir = tempname()
     output = runMCMC(model, phenotypes,
@@ -360,7 +360,7 @@ end
                      printout_model_info=false,
                      outputEBV=false,
                      output_heritability=false,
-                     fast_blocks=false)
+                     fast_blocks=false; shared_genotypes=false)
 
     marker_effects = output["marker effects geno"]
     for col in [:Class1_Frequency, :Class2_Frequency, :Class3_Frequency,
@@ -397,7 +397,7 @@ end
                                 method="BayesR",
                                 Pi=Float64[0.95, 0.03, 0.015, 0.005],
                                 estimatePi=true,
-                                estimate_variance=true)
+                                estimate_variance=true; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
     outdir = tempname()
     output = runMCMC(model, phenotypes,
@@ -410,7 +410,7 @@ end
                      outputEBV=false,
                      output_heritability=false,
                      output_marker_effect_samples=false,
-                     fast_blocks=false)
+                     fast_blocks=false; shared_genotypes=false)
 
     @test haskey(output, "marker effects geno")
     @test haskey(output, "pi_geno")
@@ -426,7 +426,7 @@ end
                                 method="BayesR",
                                 Pi=Float64[0.95, 0.03, 0.015, 0.005],
                                 estimatePi=false,
-                                estimate_variance=true)
+                                estimate_variance=true; copy_genotypes=true)
     install_bayesr_block_dispatch_probe(typeof(geno))
     BAYESR_BLOCK_DISPATCH_COUNTER[] = 0
     model = build_model("y1 = intercept + geno", 1.0)
@@ -441,7 +441,7 @@ end
                 printout_model_info=false,
                 outputEBV=false,
                 output_heritability=false,
-                fast_blocks=true)
+                fast_blocks=true; shared_genotypes=false)
 
     @test BAYESR_BLOCK_DISPATCH_COUNTER[] > 0
     isdir(outdir) && rm(outdir, recursive=true)

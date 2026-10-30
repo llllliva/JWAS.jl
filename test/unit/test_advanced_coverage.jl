@@ -13,7 +13,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
 @testset "Multi-trait BayesB" begin
     R = [1.0 0.5; 0.5 1.0]
     G = [1.0 0.5; 0.5 1.0]
-    global geno = get_genotypes(genofile, G, separator=',', method="BayesB")
+    global geno = get_genotypes(genofile, G, separator=',', method="BayesB"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno\ny2 = intercept + geno", R)
 
     output = runMCMC(model, phenotypes,
@@ -21,7 +21,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_bayesb",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "marker effects geno")
     @test haskey(output, "location parameters")
@@ -35,7 +35,7 @@ end
 @testset "Multi-trait BayesL" begin
     R = [1.0 0.5; 0.5 1.0]
     G = [1.0 0.5; 0.5 1.0]
-    global geno = get_genotypes(genofile, G, separator=',', method="BayesL")
+    global geno = get_genotypes(genofile, G, separator=',', method="BayesL"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno\ny2 = intercept + geno", R)
 
     output = runMCMC(model, phenotypes,
@@ -43,7 +43,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_bayesl",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "marker effects geno")
     @test haskey(output, "location parameters")
@@ -56,7 +56,7 @@ end
 @testset "Multi-trait GBLUP" begin
     R = [1.0 0.5; 0.5 1.0]
     G = [1.0 0.5; 0.5 1.0]
-    global geno = get_genotypes(genofile, G, separator=',', method="GBLUP")
+    global geno = get_genotypes(genofile, G, separator=',', method="GBLUP"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno\ny2 = intercept + geno", R)
 
     output = runMCMC(model, phenotypes,
@@ -64,7 +64,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_gblup",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -78,7 +78,7 @@ end
     R = [1.0 0.0; 0.0 1.0]
     G = [1.0 0.0; 0.0 1.0]
     global geno = get_genotypes(genofile, G, separator=',', method="BayesC",
-                                constraint=true)
+                                constraint=true; copy_genotypes=true)
     model = build_model("y1 = intercept + geno\ny2 = intercept + geno", R)
 
     output = runMCMC(model, phenotypes,
@@ -86,7 +86,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_constraint",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -99,7 +99,7 @@ end
 @testset "Multi-trait with missing phenotypes" begin
     R = [1.0 0.5; 0.5 1.0]
     G = [1.0 0.5; 0.5 1.0]
-    global geno = get_genotypes(genofile, G, separator=',', method="RR-BLUP")
+    global geno = get_genotypes(genofile, G, separator=',', method="RR-BLUP"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno\ny2 = intercept + geno", R)
 
     # Phenotype data already has missing values (NA)
@@ -109,7 +109,7 @@ end
                     output_samples_frequency=10,
                     missing_phenotypes=true,
                     output_folder="test_missing_pheno",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -123,7 +123,7 @@ end
     R = [1.0 0.5; 0.5 1.0]
     G = [1.0 0.5; 0.5 1.0]
     global geno = get_genotypes(genofile, G, separator=',', method="BayesC",
-                                estimatePi=true)
+                                estimatePi=true; copy_genotypes=true)
     model = build_model("y1 = intercept + geno\ny2 = intercept + geno", R)
 
     output = runMCMC(model, phenotypes,
@@ -131,7 +131,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_pi_est",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "pi_geno")
     @test haskey(output, "marker effects geno")
@@ -143,7 +143,7 @@ end
 # ========================================================================
 @testset "Single-trait BayesC with estimate_scale" begin
     global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC",
-                                estimate_scale=true)
+                                estimate_scale=true; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
 
     output = runMCMC(model, phenotypes,
@@ -151,7 +151,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_est_scale",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     rm("test_est_scale", recursive=true)
@@ -163,7 +163,7 @@ end
 @testset "Multi-trait EBV output" begin
     R = [1.0 0.5; 0.5 1.0]
     G = [1.0 0.5; 0.5 1.0]
-    global geno = get_genotypes(genofile, G, separator=',', method="BayesC")
+    global geno = get_genotypes(genofile, G, separator=',', method="BayesC"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno\ny2 = intercept + geno", R)
     outputEBV(model, geno.obsID)
 
@@ -174,7 +174,7 @@ end
                     outputEBV=true,
                     output_heritability=true,
                     output_folder="test_mt_ebv",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "EBV_y1")
     @test haskey(output, "EBV_y2")
@@ -187,7 +187,7 @@ end
 # Heterogeneous residuals (weighted analysis)
 # ========================================================================
 @testset "Single-trait with weights (heterogeneous residuals)" begin
-    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
 
     output = runMCMC(model, phenotypes,
@@ -196,7 +196,7 @@ end
                     output_samples_frequency=10,
                     heterogeneous_residuals=true,
                     output_folder="test_het_res",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     rm("test_het_res", recursive=true)
@@ -207,7 +207,7 @@ end
 # ========================================================================
 @testset "Double precision MCMC" begin
     global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC",
-                                double_precision=true)
+                                double_precision=true; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
 
     output = runMCMC(model, phenotypes,
@@ -215,7 +215,7 @@ end
                     output_samples_frequency=10,
                     double_precision=true,
                     output_folder="test_double_prec",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     rm("test_double_prec", recursive=true)

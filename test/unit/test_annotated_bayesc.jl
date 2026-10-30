@@ -11,7 +11,7 @@ function multitrait_bayesc_annotation_error(model, phenotypes; kwargs...)
     err = try
         runMCMC(
             model,
-            phenotypes;
+            phenotypes; shared_genotypes=false,
             chain_length=10,
             burnin=0,
             output_samples_frequency=5,
@@ -39,7 +39,7 @@ end
         err = nothing
         try
             get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 method="RR-BLUP",
                 annotations=annotations,
                 separator=',',
@@ -57,7 +57,7 @@ end
         err = nothing
         try
             get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 method="BayesC",
                 annotations=annotations,
                 separator=',',
@@ -76,7 +76,7 @@ end
         err = nothing
         try
             get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 method="BayesC",
                 annotations=annotations,
                 separator=',',
@@ -99,7 +99,7 @@ end
         annotations = reshape([10.0, 20.0, 30.0], 3, 1)
 
         geno = get_genotypes(
-            geno_df, 1.0;
+            geno_df, 1.0; copy_genotypes=true,
             method="BayesC",
             annotations=annotations,
             quality_control=true,
@@ -116,7 +116,7 @@ end
     @testset "forces estimatePi for annotations" begin
         annotations = rand(Float64, 5, 2)
         geno = @test_logs (:warn, r"estimatePi=false is ignored when annotations are provided") get_genotypes(
-            genofile, 1.0;
+            genofile, 1.0; copy_genotypes=true,
             method="BayesC",
             annotations=annotations,
             estimatePi=false,
@@ -140,7 +140,7 @@ end
         err = nothing
         try
             get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 method="BayesC",
                 annotations=annotations,
                 separator=',',
@@ -164,7 +164,7 @@ end
         err = nothing
         try
             get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 method="BayesC",
                 annotations=annotations,
                 separator=',',
@@ -198,7 +198,7 @@ end
                 )
 
                 geno = get_genotypes(
-                    prefix, 1.0;
+                    prefix, 1.0; copy_genotypes=true,
                     method="BayesC",
                     storage=:stream,
                     annotations=annotations,
@@ -242,7 +242,7 @@ end
                 err = nothing
                 try
                     get_genotypes(
-                        prefix, 1.0;
+                        prefix, 1.0; copy_genotypes=true,
                         method="BayesC",
                         storage=:stream,
                         annotations=reshape([10.0, 20.0, 30.0], 3, 1),
@@ -267,7 +267,7 @@ end
 
         Random.seed!(2026)
         geno_sparse = get_genotypes(
-            geno_df, 1.0;
+            geno_df, 1.0; copy_genotypes=true,
             method="BayesC",
             Pi=0.99,
             annotations=annotations,
@@ -275,14 +275,14 @@ end
         )
         Random.seed!(2027)
         geno_sparse_repeat = get_genotypes(
-            geno_df, 1.0;
+            geno_df, 1.0; copy_genotypes=true,
             method="BayesC",
             Pi=0.99,
             annotations=annotations,
             quality_control=false,
         )
         geno_dense = get_genotypes(
-            geno_df, 1.0;
+            geno_df, 1.0; copy_genotypes=true,
             method="BayesC",
             Pi=0.3,
             annotations=annotations,
@@ -290,7 +290,7 @@ end
         )
         start_pi = range(0.1, 0.9; length=20)
         geno_mid = get_genotypes(
-            geno_df, 1.0;
+            geno_df, 1.0; copy_genotypes=true,
             method="BayesC",
             Pi=collect(start_pi),
             annotations=annotations,
@@ -336,7 +336,7 @@ end
     @testset "annotation sampler uses standard probit latent variance" begin
         geno = get_genotypes(
             DataFrame(ID=["a1", "a2"], m1=[0.0, 1.0]),
-            1.0;
+            1.0; copy_genotypes=true,
             method="BayesC",
             quality_control=false,
         )
@@ -376,7 +376,7 @@ end
     @testset "single-trait annotated BayesC uses coordinate probit update with shrunken slopes" begin
         geno = get_genotypes(
             DataFrame(ID=["a1", "a2", "a3"], m1=[0.0, 1.0, 2.0]),
-            1.0;
+            1.0; copy_genotypes=true,
             method="BayesC",
             quality_control=false,
         )
@@ -435,7 +435,7 @@ end
     @testset "single-trait annotated BayesC leaves intercept-only annotation variance unchanged" begin
         geno = get_genotypes(
             DataFrame(ID=["a1", "a2"], m1=[0.0, 1.0]),
-            1.0;
+            1.0; copy_genotypes=true,
             method="BayesC",
             quality_control=false,
         )
@@ -457,7 +457,7 @@ end
                 m2=[1.0, 1.0, 0.0],
                 m3=[2.0, 1.0, 1.0],
             ),
-            2.5;
+            2.5; copy_genotypes=true,
             method="BayesC",
             Pi=0.3,
             annotations=reshape([0.0, 1.0, 0.5], 3, 1),
@@ -506,7 +506,7 @@ end
 
         global annotated_mt_setup = get_genotypes(
             genofile,
-            [1.0 0.3; 0.3 1.0];
+            [1.0 0.3; 0.3 1.0]; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -548,7 +548,7 @@ end
 
         geno = get_genotypes(
             genofile,
-            [1.0 0.3; 0.3 1.0];
+            [1.0 0.3; 0.3 1.0]; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -577,7 +577,7 @@ end
 
         geno_default = get_genotypes(
             genofile,
-            [1.0 0.3; 0.3 1.0];
+            [1.0 0.3; 0.3 1.0]; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -586,7 +586,7 @@ end
         )
         geno_auto = get_genotypes(
             genofile,
-            [1.0 0.3; 0.3 1.0];
+            [1.0 0.3; 0.3 1.0]; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -610,7 +610,7 @@ end
 
         global annotated_singletrait_sampler_override = get_genotypes(
             genofile,
-            1.0;
+            1.0; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -640,7 +640,7 @@ end
 
         global annotated_singletrait_sampler_auto = get_genotypes(
             genofile,
-            1.0;
+            1.0; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -671,7 +671,7 @@ end
 
         global annotated_mt_three_trait = get_genotypes(
             genofile,
-            [1.0 0.3 0.1; 0.3 1.0 0.2; 0.1 0.2 1.0];
+            [1.0 0.3 0.1; 0.3 1.0 0.2; 0.1 0.2 1.0]; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -712,7 +712,7 @@ end
 
         global annotated_mt_zero_shared = get_genotypes(
             genofile,
-            [1.0 0.3; 0.3 1.0];
+            [1.0 0.3; 0.3 1.0]; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -745,7 +745,7 @@ end
 
         global annotated_mt_reuse = get_genotypes(
             genofile,
-            [1.0 0.3; 0.3 1.0];
+            [1.0 0.3; 0.3 1.0]; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -790,7 +790,7 @@ end
 
         global annotated_mt_joint_reuse = get_genotypes(
             genofile,
-            [1.0 0.3; 0.3 1.0];
+            [1.0 0.3; 0.3 1.0]; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -838,7 +838,7 @@ end
 
         global annotated_mt_constraint = get_genotypes(
             genofile,
-            [1.0 0.3; 0.3 1.0];
+            [1.0 0.3; 0.3 1.0]; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -856,7 +856,7 @@ end
 
         global annotated_mt_fastblocks = get_genotypes(
             genofile,
-            [1.0 0.3; 0.3 1.0];
+            [1.0 0.3; 0.3 1.0]; copy_genotypes=true,
             separator=',',
             method="BayesC",
             quality_control=false,
@@ -869,7 +869,7 @@ end
         )
         output_fastblocks = runMCMC(
             model_fastblocks,
-            phenotypes_mt;
+            phenotypes_mt; shared_genotypes=false,
             chain_length=10,
             burnin=0,
             output_samples_frequency=5,
@@ -902,7 +902,7 @@ end
                 )
                 global annotated_mt_stream = get_genotypes(
                     prefix,
-                    [1.0 0.3; 0.3 1.0];
+                    [1.0 0.3; 0.3 1.0]; copy_genotypes=true,
                     method="BayesC",
                     storage=:stream,
                     annotations=annotations,
@@ -933,7 +933,7 @@ end
     mktempdir() do tmpdir
         cd(tmpdir) do
             global plain_geno = get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 separator=',',
                 method="BayesC",
                 quality_control=false,
@@ -949,7 +949,7 @@ end
                 outputEBV=false,
                 output_heritability=false,
                 seed=2026,
-            )
+            ; shared_genotypes=false)
 
             @test model.M[1].π isa AbstractVector
             @test nrow(output["pi_plain_geno"]) == 1
@@ -976,7 +976,7 @@ end
     mktempdir() do tmpdir
         cd(tmpdir) do
             global annotated_geno = get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 separator=',',
                 method="BayesC",
                 quality_control=false,
@@ -991,7 +991,7 @@ end
                 output_samples_frequency=10,
                 printout_frequency=31,
                 seed=2026,
-            )
+            ; shared_genotypes=false)
 
             @test model.M[1].π isa AbstractVector
             @test length(model.M[1].π) == model.M[1].nMarkers
@@ -1027,7 +1027,7 @@ end
     mktempdir() do tmpdir
         cd(tmpdir) do
             global annotated_blocks = get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 separator=',',
                 method="BayesC",
                 quality_control=false,
@@ -1043,7 +1043,7 @@ end
                 printout_frequency=31,
                 seed=2026,
                 fast_blocks=true,
-            )
+            ; shared_genotypes=false)
 
             @test model.M[1].π isa AbstractVector
             @test length(model.M[1].π) == model.M[1].nMarkers
@@ -1068,7 +1068,7 @@ end
     mktempdir() do tmpdir
         cd(tmpdir) do
             global annotated_blocks_independent = get_genotypes(
-                genofile, 1.0;
+                genofile, 1.0; copy_genotypes=true,
                 separator=',',
                 method="BayesC",
                 quality_control=false,
@@ -1087,7 +1087,7 @@ end
                 independent_blocks=true,
                 outputEBV=false,
                 output_heritability=false,
-            )
+            ; shared_genotypes=false)
 
             @test model.MCMCinfo.independent_blocks == true
             @test model.MCMCinfo.fast_blocks == [1, 3, 5]
@@ -1127,7 +1127,7 @@ end
                 center=true,
             )
             global annotated_stream = get_genotypes(
-                prefix, 1.0;
+                prefix, 1.0; copy_genotypes=true,
                 method="BayesC",
                 storage=:stream,
                 annotations=annotations,
@@ -1148,7 +1148,7 @@ end
                 output_heritability=false,
                 seed=2026,
                 memory_guard=:off,
-            )
+            ; shared_genotypes=false)
 
             @test model.M[1].π isa AbstractVector
             @test length(model.M[1].π) == model.M[1].nMarkers

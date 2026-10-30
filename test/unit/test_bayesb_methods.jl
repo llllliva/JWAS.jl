@@ -6,7 +6,7 @@ genofile = Datasets.dataset("genotypes.txt", dataset_name="demo_7animals")
 phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
 
 @testset "BayesB single-trait" begin
-    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesB")
+    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesB"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
 
     output = runMCMC(model, phenotypes,
@@ -14,7 +14,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_bayesb",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "marker effects geno")
     @test haskey(output, "location parameters")
@@ -22,7 +22,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
 end
 
 @testset "BayesA single-trait (converted to BayesB with π=0)" begin
-    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesA")
+    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesA"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
 
     output = runMCMC(model, phenotypes,
@@ -30,7 +30,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_bayesa",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "marker effects geno")
     @test haskey(output, "location parameters")
@@ -38,7 +38,7 @@ end
 end
 
 @testset "BayesL (Lasso) single-trait" begin
-    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesL")
+    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesL"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
 
     output = runMCMC(model, phenotypes,
@@ -46,7 +46,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_bayesl",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "marker effects geno")
     @test haskey(output, "location parameters")
@@ -54,7 +54,7 @@ end
 end
 
 @testset "GBLUP" begin
-    global geno = get_genotypes(genofile, 1.0, separator=',', method="GBLUP")
+    global geno = get_genotypes(genofile, 1.0, separator=',', method="GBLUP"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
 
     output = runMCMC(model, phenotypes,
@@ -62,7 +62,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_gblup",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     rm("test_gblup", recursive=true)

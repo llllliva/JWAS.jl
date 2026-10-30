@@ -68,6 +68,8 @@ println()
     # UNIT TESTS (Always run - fast feedback)
     # ========================================================================
     @testset "Unit Tests" begin
+        include(joinpath(@__DIR__, "unit", "test_genotype_matrix_ownership.jl"))
+        include(joinpath(@__DIR__, "unit", "test_shared_genotype_views.jl"))
         @testset "Memory Guardrails" begin
             include(joinpath(@__DIR__, "unit", "test_memory_guardrails.jl"))
         end
@@ -200,7 +202,7 @@ println()
             
             @testset "Load from file with header" begin
                 geno = get_genotypes(genofile, 1.0, separator=',', header=true, 
-                                    method="BayesC")
+                                    method="BayesC"; copy_genotypes=true)
                 @test geno.nMarkers > 0
                 @test geno.nObs > 0
                 @test geno.centered == true
@@ -213,7 +215,7 @@ println()
                 methods = ["BayesA", "BayesB", "BayesC", "RR-BLUP", "BayesL", "GBLUP"]
                 for method in methods
                     geno = get_genotypes(genofile, 1.0, separator=',', 
-                                        method=method)
+                                        method=method; copy_genotypes=true)
                     @test geno.method == method
                     @test geno.nMarkers > 0
                 end
@@ -221,9 +223,9 @@ println()
             
             @testset "Quality control" begin
                 geno_with_qc = get_genotypes(genofile, 1.0, separator=',',
-                                            quality_control=true, MAF=0.01)
+                                            quality_control=true, MAF=0.01; copy_genotypes=true)
                 geno_no_qc = get_genotypes(genofile, 1.0, separator=',',
-                                          quality_control=false)
+                                          quality_control=false; copy_genotypes=true)
                 # QC should remove some markers or keep same
                 @test geno_with_qc.nMarkers <= geno_no_qc.nMarkers
             end
@@ -263,7 +265,7 @@ println()
                                  missingstring=["NA"])
             
             @testset "Single-trait BayesC" begin
-                global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+                global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
                 model = build_model("y1 = intercept + geno", 1.0)
                 
                 output = runMCMC(model, phenotypes, 
@@ -271,7 +273,7 @@ println()
                                burnin=10,
                                output_samples_frequency=10,
                                output_folder="results",
-                               seed=123)
+                               seed=123; shared_genotypes=false)
                 
                 @test haskey(output, "location parameters")
                 @test haskey(output, "residual variance")
@@ -283,13 +285,13 @@ println()
             end
             
             @testset "Output folder creation" begin
-                global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP")
+                global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP"; copy_genotypes=true)
                 model = build_model("y1 = intercept + geno", 1.0)
                 
                 output = runMCMC(model, phenotypes,
                                chain_length=50,
                                output_folder="test_results_temp",
-                               seed=123)
+                               seed=123; shared_genotypes=false)
                 
                 @test isdir("test_results_temp")
                 @test isfile("test_results_temp/location_parameters.txt")
@@ -300,15 +302,15 @@ println()
             end
             
             @testset "Reproducibility with seed" begin
-                global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP")
+                global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP"; copy_genotypes=true)
                 model1 = build_model("y1 = intercept + geno", 1.0)
                 out1 = runMCMC(model1, phenotypes, chain_length=50, 
-                              output_folder="temp1", seed=999)
+                              output_folder="temp1", seed=999; shared_genotypes=false)
                 
-                global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP")
+                global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP"; copy_genotypes=true)
                 model2 = build_model("y1 = intercept + geno", 1.0)
                 out2 = runMCMC(model2, phenotypes, chain_length=50,
-                              output_folder="temp2", seed=999)
+                              output_folder="temp2", seed=999; shared_genotypes=false)
                 
                 # Results should be identical with same seed
                 @test out1["residual variance"][1, :Estimate] ≈ 
@@ -331,11 +333,11 @@ println()
                                  missingstring=["NA"])
             
             @testset "Model frequency calculation" begin
-                global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+                global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
                 model = build_model("y1 = intercept + geno", 1.0)
                 
                 output = runMCMC(model, phenotypes, chain_length=50,
-                               output_folder="gwas_test", seed=123)
+                               output_folder="gwas_test", seed=123; shared_genotypes=false)
                 
                 gwas_result = GWAS("gwas_test/MCMC_samples_marker_effects_geno_y1.txt")
                 
@@ -372,7 +374,7 @@ println()
                 # Should handle missing values without error
                 model = build_model("y1 = intercept", 1.0)
                 output = runMCMC(model, phenotypes, chain_length=10,
-                                output_folder="missing_test", seed=123)
+                                output_folder="missing_test", seed=123; shared_genotypes=false)
                 @test haskey(output, "location parameters")
                 
                 # Cleanup
@@ -388,13 +390,13 @@ println()
             
             @testset "Single precision (default)" begin
                 geno = get_genotypes(genofile, 1.0, separator=',',
-                                    double_precision=false)
+                                    double_precision=false; copy_genotypes=true)
                 @test eltype(geno.genotypes) == Float32
             end
             
             @testset "Double precision" begin
                 geno = get_genotypes(genofile, 1.0, separator=',',
-                                    double_precision=true)
+                                    double_precision=true; copy_genotypes=true)
                 @test eltype(geno.genotypes) == Float64
             end
         end

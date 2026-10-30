@@ -29,13 +29,13 @@ end
                 @test isfile(prefix * ".jgb2")
                 @test isfile(prefix * ".meta")
 
-                dense = get_genotypes("geno_missing.csv", 1.0;
+                dense = get_genotypes("geno_missing.csv", 1.0; copy_genotypes=true,
                                       separator=',',
                                       header=true,
                                       method="BayesC",
                                       quality_control=true,
                                       center=true)
-                stream = get_genotypes(prefix, 1.0;
+                stream = get_genotypes(prefix, 1.0; copy_genotypes=true,
                                        method="BayesC",
                                        storage=:stream)
 
@@ -63,14 +63,14 @@ end
                 phenotypes = DataFrame(ID=ids,
                                        y1=Float32[1.1, -0.3, 0.8, -0.9, 0.5, -0.1])
 
-                global geno = get_genotypes("geno_nomissing.csv", 1.0;
+                global geno = get_genotypes("geno_nomissing.csv", 1.0; copy_genotypes=true,
                                             separator=',',
                                             header=true,
                                             method="BayesC",
                                             quality_control=false,
                                             center=true)
                 model_dense = build_model("y1 = intercept + geno", 1.0)
-                out_dense = runMCMC(model_dense, phenotypes;
+                out_dense = runMCMC(model_dense, phenotypes; shared_genotypes=false,
                                     chain_length=40,
                                     burnin=10,
                                     output_samples_frequency=10,
@@ -80,11 +80,11 @@ end
                                     seed=2026,
                                     memory_guard=:off)
 
-                global geno = get_genotypes(prefix, 1.0;
+                global geno = get_genotypes(prefix, 1.0; copy_genotypes=true,
                                             method="BayesC",
                                             storage=:stream)
                 model_stream = build_model("y1 = intercept + geno", 1.0)
-                out_stream = runMCMC(model_stream, phenotypes;
+                out_stream = runMCMC(model_stream, phenotypes; shared_genotypes=false,
                                      chain_length=40,
                                      burnin=10,
                                      output_samples_frequency=10,

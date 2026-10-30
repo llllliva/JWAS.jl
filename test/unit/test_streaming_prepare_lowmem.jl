@@ -26,13 +26,13 @@ end
                                                           quality_control=true,
                                                           center=true,
                                                           missing_value=9.0)
-                dense = get_genotypes("geno.csv", 1.0;
+                dense = get_genotypes("geno.csv", 1.0; copy_genotypes=true,
                                       separator=',',
                                       header=true,
                                       method="BayesC",
                                       quality_control=true,
                                       center=true)
-                stream = get_genotypes(prefix, 1.0;
+                stream = get_genotypes(prefix, 1.0; copy_genotypes=true,
                                        method="BayesC",
                                        storage=:stream)
 
@@ -56,7 +56,7 @@ end
                                                           quality_control=false,
                                                           center=false,
                                                           missing_value=9.0)
-                stream = get_genotypes(prefix, 1.0;
+                stream = get_genotypes(prefix, 1.0; copy_genotypes=true,
                                        method="BayesC",
                                        storage=:stream)
                 marker_buf = zeros(Float32, stream.nObs)
@@ -142,10 +142,10 @@ end
                 after_lowmem = Set(readdir(tmproot))
                 @test !isempty(setdiff(after_lowmem, before))
 
-                dense_stream = get_genotypes(dense_prefix, 1.0;
+                dense_stream = get_genotypes(dense_prefix, 1.0; copy_genotypes=true,
                                              method="BayesC",
                                              storage=:stream)
-                lowmem_stream = get_genotypes(lowmem_prefix, 1.0;
+                lowmem_stream = get_genotypes(lowmem_prefix, 1.0; copy_genotypes=true,
                                               method="BayesC",
                                               storage=:stream)
                 @test dense_stream.markerID == lowmem_stream.markerID

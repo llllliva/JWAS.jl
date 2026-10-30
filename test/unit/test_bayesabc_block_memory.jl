@@ -17,6 +17,36 @@ function make_block_inputs(nobs::Int,nmarkers::Int,block_size::Int)
     return (XArray,xpRinvx,X,XpRinvX,yCorr,α,β,δ,1.0,fill(1.0,nmarkers),0.95,Rinv)
 end
 
+@testset "BayesABC shared-row residual consistency" begin
+    # Training rows occupy only part of the parent, so column stride differs
+    # from the training sample size, as in the memory-saving production path.
+    for T in (Float32, Float64), independent in (false, true), seed in (73, 123, 456)
+        rng = MersenneTwister(seed)
+        backing = randn(rng,T,41,11)
+        original = copy(backing)
+        X = view(backing,1:29,:)
+        starts = 1:4:11
+        blocks = [view(X,:,s:min(s+3,11)) for s in starts]
+        grams = [b' * b for b in blocks]
+        diagonals = T[dot(view(X,:,j),view(X,:,j)) for j in 1:11]
+        residual = randn(rng,T,29)
+        before = copy(residual)
+        alpha = randn(rng,T,11)
+        oldalpha = copy(alpha)
+        beta = copy(alpha)
+        delta = ones(T,11)
+        Random.seed!(seed)
+        JWAS.BayesABC_block!(blocks,diagonals,X,grams,residual,alpha,beta,delta,
+                            one(T),ones(T,11),T(0.95),ones(T,29),independent)
+        expected = before + X*(oldalpha-alpha)
+        @test isapprox(residual,expected;atol=100eps(T),rtol=100eps(T))
+        @test eltype(residual) === T && eltype(alpha) === T
+        @test backing == original
+        @test all(isfinite,residual) && all(isfinite,alpha)
+        @test all(d -> d == 0 || d == 1,delta)
+    end
+end
+
 function measure_block_alloc(nobs::Int,nmarkers::Int,block_size::Int)
     args = make_block_inputs(nobs,nmarkers,block_size)
     Random.seed!(123)
@@ -32,4 +62,29 @@ end
     alloc_small = measure_block_alloc(nobs,64,block_size)
     alloc_large = measure_block_alloc(nobs,512,block_size)
     @test alloc_large <= alloc_small * 12
+end
+
+@testset "BayesR shared-row residual consistency" begin
+    for T in (Float32, Float64), independent in (false, true), seed in (73,123,456)
+        rng = MersenneTwister(seed)
+        backing = randn(rng,T,41,11)
+        original = copy(backing)
+        X = view(backing,1:29,:)
+        blocks = [view(X,:,s:min(s+3,11)) for s in 1:4:11]
+        grams = [b' * b for b in blocks]
+        diagonals = T[dot(view(X,:,j),view(X,:,j)) for j in 1:11]
+        residual = randn(rng,T,29)
+        before = copy(residual)
+        alpha = randn(rng,T,11)
+        oldalpha = copy(alpha)
+        delta = ones(Int,11)
+        Random.seed!(seed)
+        JWAS.BayesR_block!(blocks,diagonals,X,grams,residual,alpha,delta,
+            one(T),1.0,[0.65,0.25,0.08,0.02],JWAS.BAYESR_GAMMA,ones(T,29),10,5,independent)
+        @test isapprox(residual,before+X*(oldalpha-alpha);atol=100eps(T),rtol=100eps(T))
+        @test eltype(residual) === T && eltype(alpha) === T
+        @test backing == original
+        @test all(isfinite,residual) && all(isfinite,alpha)
+        @test all(d -> d in 1:4,delta)
+    end
 end

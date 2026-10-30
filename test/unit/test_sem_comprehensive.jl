@@ -271,11 +271,11 @@ end
     @testset "non-lower-triangular errors" begin
         R = [1.0 0.2; 0.2 1.0]
         G = [1.0 0.2; 0.2 1.0]
-        global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC")
+        global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC"; copy_genotypes=true)
         model = build_model("y1 = intercept + genotypes\ny2 = intercept + genotypes", R)
         # Upper triangular should error
         cs_upper = [0.0 1.0; 0.0 0.0]
-        @test_throws ErrorException runMCMC(model, phenotypes_complete;
+        @test_throws ErrorException runMCMC(model, phenotypes_complete; shared_genotypes=false,
             causal_structure=cs_upper,
             chain_length=10,
             printout_model_info=false,
@@ -285,10 +285,10 @@ end
     end
 
     @testset "single-trait with causal_structure errors" begin
-        global genotypes = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+        global genotypes = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
         model = build_model("y1 = intercept + genotypes", 1.0)
         cs = [0.0 0.0; 1.0 0.0]
-        @test_throws ErrorException runMCMC(model, phenotypes_complete;
+        @test_throws ErrorException runMCMC(model, phenotypes_complete; shared_genotypes=false,
             causal_structure=cs,
             chain_length=10,
             printout_model_info=false,
@@ -300,11 +300,11 @@ end
     @testset "marker effect samples required for causal_structure" begin
         R = [1.0 0.2; 0.2 1.0]
         G = [1.0 0.2; 0.2 1.0]
-        global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC")
+        global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC"; copy_genotypes=true)
         model = build_model("y1 = intercept + genotypes\ny2 = intercept + genotypes", R)
         cs = [0.0 0.0; 1.0 0.0]
         err = try
-            runMCMC(model, phenotypes_complete;
+            runMCMC(model, phenotypes_complete; shared_genotypes=false,
                 causal_structure=cs,
                 chain_length=10,
                 burnin=2,
@@ -327,12 +327,12 @@ end
     @testset "constraints are set correctly" begin
         R = [1.0 0.2; 0.2 1.0]
         G = [1.0 0.2; 0.2 1.0]
-        global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC")
+        global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC"; copy_genotypes=true)
         model = build_model("y1 = intercept + genotypes\ny2 = intercept + genotypes", R)
         cs = [0.0 0.0; 1.0 0.0]
         # Access internal state after runMCMC sets constraints
         # We run a very short chain and check the output exists
-        output = runMCMC(model, phenotypes_complete;
+        output = runMCMC(model, phenotypes_complete; shared_genotypes=false,
             causal_structure=cs,
             chain_length=10,
             burnin=2,
@@ -360,7 +360,7 @@ end
 
     R = [1.0 0.2; 0.2 1.0]
     G = [1.0 0.2; 0.2 1.0]
-    global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC")
+    global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC"; copy_genotypes=true)
     model = build_model("y1 = intercept + genotypes\ny2 = intercept + genotypes", R)
 
     cs = [0.0 0.0; 1.0 0.0]
@@ -368,7 +368,7 @@ end
     burnin = 20
     freq = 10
 
-    output = runMCMC(model, phenotypes_complete;
+    output = runMCMC(model, phenotypes_complete; shared_genotypes=false,
         causal_structure=cs,
         chain_length=chain_length,
         burnin=burnin,
@@ -446,13 +446,13 @@ end
 
     R = [1.0 0.2 0.1; 0.2 1.0 0.2; 0.1 0.2 1.0]
     G = [1.0 0.2 0.1; 0.2 1.0 0.2; 0.1 0.2 1.0]
-    global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC")
+    global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC"; copy_genotypes=true)
     model = build_model("y1 = intercept + genotypes\ny2 = intercept + genotypes\ny3 = intercept + genotypes", R)
 
     # trait 1 -> trait 2, trait 1 -> trait 3, trait 2 -> trait 3
     cs = [0.0 0.0 0.0; 1.0 0.0 0.0; 1.0 1.0 0.0]
 
-    output = runMCMC(model, phenotypes_complete;
+    output = runMCMC(model, phenotypes_complete; shared_genotypes=false,
         causal_structure=cs,
         chain_length=50,
         burnin=10,
@@ -507,10 +507,10 @@ end
     function run_sem_with_seed(seed, folder)
         R = [1.0 0.2; 0.2 1.0]
         G = [1.0 0.2; 0.2 1.0]
-        global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC")
+        global genotypes = get_genotypes(genofile, G, separator=',', method="BayesC"; copy_genotypes=true)
         model = build_model("y1 = intercept + genotypes\ny2 = intercept + genotypes", R)
         cs = [0.0 0.0; 1.0 0.0]
-        runMCMC(model, phenotypes_complete;
+        runMCMC(model, phenotypes_complete; shared_genotypes=false,
             causal_structure=cs,
             chain_length=30,
             burnin=5,

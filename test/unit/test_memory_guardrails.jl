@@ -121,7 +121,7 @@ end
     mktempdir() do tmpdir
         cd(tmpdir) do
             @testset "runMCMC throws early in :error mode when guard threshold is tiny" begin
-                global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+                global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
                 model = build_model("y1 = intercept + geno", 1.0)
                 @test_throws ErrorException runMCMC(model, phenotypes,
                                                     chain_length=10,
@@ -130,11 +130,11 @@ end
                                                     output_folder="guardrail_error_mode",
                                                     seed=123,
                                                     memory_guard=:error,
-                                                    memory_guard_ratio=1e-12)
+                                                    memory_guard_ratio=1e-12; shared_genotypes=false)
             end
 
             @testset "runMCMC proceeds in :off mode with same threshold" begin
-                global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+                global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
                 original_genotype_ids = copy(geno.obsID)
                 model = build_model("y1 = intercept + geno", 1.0)
                 output = runMCMC(model, phenotypes,
@@ -144,7 +144,7 @@ end
                                  output_folder="guardrail_off_mode",
                                  seed=123,
                                  memory_guard=:off,
-                                 memory_guard_ratio=1e-12)
+                                 memory_guard_ratio=1e-12; shared_genotypes=false)
                 @test haskey(output, "location parameters")
                 ids_from_file = vec(string.(readdlm(joinpath("guardrail_off_mode", "IDs_for_individuals_with_genotypes.txt"))))
                 @test ids_from_file == original_genotype_ids

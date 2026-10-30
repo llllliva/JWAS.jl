@@ -58,7 +58,7 @@ end
         output = runMCMC(model, phenotypes,
                         chain_length=50,
                         output_folder="test_set_random_ped",
-                        seed=123)
+                        seed=123; shared_genotypes=false)
         @test haskey(output, "polygenic effects covariance matrix")
         @test haskey(output, "location parameters")
         rm("test_set_random_ped", recursive=true)

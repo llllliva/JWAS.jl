@@ -130,7 +130,7 @@ end
 
 @testset "Multi-trait BayesC" begin
     G = [1.0 0.5; 0.5 1.0]
-    global geno = get_genotypes(genofile, G, separator=',', method="BayesC")
+    global geno = get_genotypes(genofile, G, separator=',', method="BayesC"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno\ny2 = intercept + geno", R)
 
     output = runMCMC(model, phenotypes,
@@ -138,7 +138,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_bayesc",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -150,8 +150,8 @@ end
 @testset "Multi-trait BayesC sampler default and auto selection" begin
     G = [1.0 0.5; 0.5 1.0]
 
-    geno_default = get_genotypes(genofile, G, separator=',', method="BayesC")
-    geno_auto = get_genotypes(genofile, G, separator=',', method="BayesC", multi_trait_sampler=:auto)
+    geno_default = get_genotypes(genofile, G, separator=',', method="BayesC"; copy_genotypes=true)
+    geno_auto = get_genotypes(genofile, G, separator=',', method="BayesC", multi_trait_sampler=:auto; copy_genotypes=true)
 
     @test geno_default.multi_trait_sampler == :I
     @test geno_auto.multi_trait_sampler == :auto
@@ -179,7 +179,7 @@ end
     )
     global annotated_mt_geno = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -196,7 +196,7 @@ end
         output_samples_frequency=10,
         output_folder="test_mt_annotated_bayesc",
         seed=123,
-    )
+    ; shared_genotypes=false)
 
     @test model.M[1].annotations !== false
     @test model.M[1].annotations.nsteps == 3
@@ -216,7 +216,7 @@ end
     )
     global annotated_mt_bayesr = get_genotypes(
         genofile,
-        [1.0 0.3; 0.3 1.0];
+        [1.0 0.3; 0.3 1.0]; copy_genotypes=true,
         separator=',',
         method="BayesR",
         quality_control=false,
@@ -226,7 +226,7 @@ end
     outdir = "test_mt_annotated_bayesr"
     output = runMCMC(
         model,
-        phenotypes_mt;
+        phenotypes_mt; shared_genotypes=false,
         chain_length=20,
         burnin=5,
         output_samples_frequency=5,
@@ -276,7 +276,7 @@ end
     )
     global annotated_mt_geno_sampler2 = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -296,7 +296,7 @@ end
         output_samples_frequency=10,
         output_folder="test_mt_annotated_bayesc_sampler2",
         seed=123,
-    )
+    ; shared_genotypes=false)
 
     @test haskey(output, "annotation coefficients annotated_mt_geno_sampler2")
     @test haskey(output, "pi_annotated_mt_geno_sampler2")
@@ -308,7 +308,7 @@ end
 
     global plain_mt_dense_sampler2 = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -324,7 +324,7 @@ end
         output_samples_frequency=10,
         output_folder="test_mt_bayesc_dense_sampler2",
         seed=123,
-    )
+    ; shared_genotypes=false)
 
     @test haskey(output, "marker effects plain_mt_dense_sampler2")
     @test haskey(output, "location parameters")
@@ -336,7 +336,7 @@ end
 
     global plain_mt_fastblocks = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -352,7 +352,7 @@ end
         output_folder="test_mt_bayesc_fastblocks",
         seed=123,
         fast_blocks=true,
-    )
+    ; shared_genotypes=false)
 
     @test haskey(output, "marker effects plain_mt_fastblocks")
     @test haskey(output, "location parameters")
@@ -364,7 +364,7 @@ end
 
     global plain_mt_fastblocks_sampler2 = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -381,7 +381,7 @@ end
         output_folder="test_mt_bayesc_fastblocks_sampler2",
         seed=123,
         fast_blocks=true,
-    )
+    ; shared_genotypes=false)
 
     @test haskey(output, "marker effects plain_mt_fastblocks_sampler2")
     @test haskey(output, "location parameters")
@@ -411,7 +411,7 @@ end
 
     global annotated_mt_fastblocks_sampler2 = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -430,7 +430,7 @@ end
         output_folder="test_mt_annotated_bayesc_fastblocks_sampler2",
         seed=123,
         fast_blocks=true,
-    )
+    ; shared_genotypes=false)
 
     @test haskey(output, "annotation coefficients annotated_mt_fastblocks_sampler2")
     @test haskey(output, "pi_annotated_mt_fastblocks_sampler2")
@@ -442,7 +442,7 @@ end
 
     global plain_mt_independent_sampler1 = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -464,7 +464,7 @@ end
         independent_blocks=true,
         outputEBV=false,
         output_heritability=false,
-    )
+    ; shared_genotypes=false)
 
     @test haskey(output, "marker effects plain_mt_independent_sampler1")
     @test haskey(output, "location parameters")
@@ -478,7 +478,7 @@ end
 
     global plain_mt_independent_sampler2 = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -500,7 +500,7 @@ end
         independent_blocks=true,
         outputEBV=false,
         output_heritability=false,
-    )
+    ; shared_genotypes=false)
 
     @test haskey(output, "marker effects plain_mt_independent_sampler2")
     @test haskey(output, "location parameters")
@@ -532,7 +532,7 @@ end
 
     global annotated_mt_independent_sampler1 = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -556,7 +556,7 @@ end
         independent_blocks=true,
         outputEBV=false,
         output_heritability=false,
-    )
+    ; shared_genotypes=false)
 
     @test haskey(output, "annotation coefficients annotated_mt_independent_sampler1")
     @test haskey(output, "pi_annotated_mt_independent_sampler1")
@@ -588,7 +588,7 @@ end
 
     global annotated_mt_independent_sampler2 = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -612,7 +612,7 @@ end
         independent_blocks=true,
         outputEBV=false,
         output_heritability=false,
-    )
+    ; shared_genotypes=false)
 
     @test haskey(output, "annotation coefficients annotated_mt_independent_sampler2")
     @test haskey(output, "pi_annotated_mt_independent_sampler2")
@@ -726,7 +726,7 @@ end
 
     plain_geno = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -734,7 +734,7 @@ end
     )
     plain_auto_geno = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -743,7 +743,7 @@ end
     )
     annotated_geno = get_genotypes(
         genofile,
-        G;
+        G; copy_genotypes=true,
         separator=',',
         method="BayesC",
         quality_control=false,
@@ -767,7 +767,7 @@ end
 
 @testset "Multi-trait RR-BLUP" begin
     G = [1.0 0.5; 0.5 1.0]
-    global geno = get_genotypes(genofile, G, separator=',', method="RR-BLUP")
+    global geno = get_genotypes(genofile, G, separator=',', method="RR-BLUP"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno\ny2 = intercept + geno", R)
 
     output = runMCMC(model, phenotypes,
@@ -775,7 +775,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_rrblup",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -793,7 +793,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_ped",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "polygenic effects covariance matrix")
     @test haskey(output, "location parameters")
@@ -803,7 +803,7 @@ end
 
 @testset "Multi-trait with i.i.d. random effect" begin
     G_geno = [1.0 0.5; 0.5 1.0]
-    global geno = get_genotypes(genofile, G_geno, separator=',', method="RR-BLUP")
+    global geno = get_genotypes(genofile, G_geno, separator=',', method="RR-BLUP"; copy_genotypes=true)
     model = build_model("y1 = intercept + x2 + geno\ny2 = intercept + x2 + geno", R)
     G = [0.5 0.1; 0.1 0.5]
     set_random(model, "x2", G)
@@ -813,7 +813,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_mt_iid",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")

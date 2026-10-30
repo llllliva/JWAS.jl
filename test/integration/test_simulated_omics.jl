@@ -34,7 +34,7 @@ phenotypes[!, :litter] = string.(phenotypes[!, :litter])
             estimatePi = test_method in ["BayesC", "BayesB"]
             G = 1.0
             global geno = get_genotypes(genofile, G, header=true, separator=',',
-                                        method=test_method, estimatePi=estimatePi)
+                                        method=test_method, estimatePi=estimatePi; copy_genotypes=true)
 
             model = build_model("trait1 = intercept + geno", 1.0)
 
@@ -45,7 +45,7 @@ phenotypes[!, :litter] = string.(phenotypes[!, :litter])
                              output_samples_frequency=50,
                              output_folder=outdir,
                              printout_frequency=500,
-                             seed=314)
+                             seed=314; shared_genotypes=false)
 
             # Output structure checks
             @test haskey(output, "location parameters")
@@ -110,7 +110,7 @@ end
             estimatePi = test_method == "BayesC"
             G = 1.0
             global geno = get_genotypes(genofile, G, header=true, separator=',',
-                                        method=test_method, estimatePi=estimatePi)
+                                        method=test_method, estimatePi=estimatePi; copy_genotypes=true)
 
             model = build_model("trait1 = intercept + geno", 1.0)
 
@@ -123,7 +123,7 @@ end
                              printout_frequency=500,
                              single_step_analysis=true,
                              pedigree=pedigree,
-                             seed=314)
+                             seed=314; shared_genotypes=false)
 
             # Output structure checks
             @test haskey(output, "location parameters")
@@ -152,7 +152,7 @@ end
 @testset "Multi-trait analysis" begin
     G = [1.0 0.5; 0.5 1.0]
     global geno = get_genotypes(genofile, G, header=true, separator=',',
-                                method="BayesC", estimatePi=true)
+                                method="BayesC", estimatePi=true; copy_genotypes=true)
 
     R = [1.0 0.5; 0.5 1.0]
     model = build_model("trait1 = intercept + geno\nomic1 = intercept + geno", R)
@@ -164,7 +164,7 @@ end
                      output_samples_frequency=50,
                      output_folder=outdir,
                      printout_frequency=500,
-                     seed=314)
+                     seed=314; shared_genotypes=false)
 
     # Output structure checks
     @test haskey(output, "location parameters")
@@ -189,7 +189,7 @@ end
 @testset "Model with random effects" begin
     G_marker = 1.0
     global geno = get_genotypes(genofile, G_marker, header=true, separator=',',
-                                method="BayesC", estimatePi=true)
+                                method="BayesC", estimatePi=true; copy_genotypes=true)
 
     model = build_model("trait1 = intercept + group + litter + geno", 1.0)
     set_random(model, "litter", 1.0)
@@ -201,7 +201,7 @@ end
                      output_samples_frequency=50,
                      output_folder=outdir,
                      printout_frequency=500,
-                     seed=314)
+                     seed=314; shared_genotypes=false)
 
     # Output structure checks
     @test haskey(output, "location parameters")
@@ -228,7 +228,7 @@ end
 @testset "GWAS with simulated data" begin
     G = 1.0
     global geno = get_genotypes(genofile, G, header=true, separator=',',
-                                method="BayesC", estimatePi=true)
+                                method="BayesC", estimatePi=true; copy_genotypes=true)
 
     model = build_model("trait1 = intercept + geno", 1.0)
 
@@ -239,7 +239,7 @@ end
                      output_samples_frequency=50,
                      output_folder=outdir,
                      printout_frequency=500,
-                     seed=314)
+                     seed=314; shared_genotypes=false)
 
     # Run GWAS on marker effect samples
     gwas_result = GWAS(joinpath(outdir, "MCMC_samples_marker_effects_geno_trait1.txt"))
@@ -259,15 +259,15 @@ end
 
 @testset "Reproducibility with seed" begin
     G = 1.0
-    global geno = get_genotypes(genofile, G, header=true, separator=',', method="RR-BLUP")
+    global geno = get_genotypes(genofile, G, header=true, separator=',', method="RR-BLUP"; copy_genotypes=true)
     model1 = build_model("trait1 = intercept + geno", 1.0)
     out1 = runMCMC(model1, phenotypes, chain_length=200,
-                   output_folder="repro1", printout_frequency=500, seed=999)
+                   output_folder="repro1", printout_frequency=500, seed=999; shared_genotypes=false)
 
-    global geno = get_genotypes(genofile, G, header=true, separator=',', method="RR-BLUP")
+    global geno = get_genotypes(genofile, G, header=true, separator=',', method="RR-BLUP"; copy_genotypes=true)
     model2 = build_model("trait1 = intercept + geno", 1.0)
     out2 = runMCMC(model2, phenotypes, chain_length=200,
-                   output_folder="repro2", printout_frequency=500, seed=999)
+                   output_folder="repro2", printout_frequency=500, seed=999; shared_genotypes=false)
 
     @test out1["residual variance"][1, :Estimate] ≈
           out2["residual variance"][1, :Estimate] atol=1e-10

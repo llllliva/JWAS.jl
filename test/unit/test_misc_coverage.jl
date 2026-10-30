@@ -51,7 +51,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
 end
 
 @testset "Reproducibility across methods" begin
-    global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP")
+    global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno", 1.0)
 
     output = runMCMC(model, phenotypes,
@@ -59,7 +59,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_repro",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -67,7 +67,7 @@ end
 end
 
 @testset "outputMCMCsamples for multiple terms" begin
-    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+    global geno = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
     model = build_model("y1 = intercept + x1 + geno", 1.0)
     set_covariate(model, "x1")
     outputMCMCsamples(model, "intercept", "x1")
@@ -76,7 +76,7 @@ end
                     chain_length=50,
                     output_samples_frequency=10,
                     output_folder="test_multi_samples",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     @test isfile("test_multi_samples/MCMC_samples_y1.intercept.txt")
     @test isfile("test_multi_samples/MCMC_samples_y1.x1.txt")
@@ -99,14 +99,14 @@ end
 @testset "Multi-trait describe" begin
     R = [1.0 0.5; 0.5 1.0]
     G = [1.0 0.5; 0.5 1.0]
-    global geno = get_genotypes(genofile, G, separator=',', method="BayesC")
+    global geno = get_genotypes(genofile, G, separator=',', method="BayesC"; copy_genotypes=true)
     model = build_model("y1 = intercept + geno\ny2 = intercept + geno", R)
 
     output = runMCMC(model, phenotypes,
                     chain_length=50,
                     output_samples_frequency=10,
                     output_folder="test_mt_describe",
-                    seed=123)
+                    seed=123; shared_genotypes=false)
 
     # describe() should work after MCMC (MCMCinfo is set)
     @test describe(model) === nothing
@@ -114,11 +114,11 @@ end
 end
 
 @testset "Independent blocks API and explicit block starts" begin
-    global ib_geno_exact = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+    global ib_geno_exact = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
     exact_model = build_model("y1 = intercept + ib_geno_exact", 1.0)
     exact_output = runMCMC(
         exact_model,
-        phenotypes;
+        phenotypes; shared_genotypes=false,
         chain_length=6,
         output_samples_frequency=10,
         output_folder="test_independent_blocks_exact",
@@ -130,11 +130,11 @@ end
     @test exact_model.MCMCinfo.independent_blocks == false
     isdir("test_independent_blocks_exact") && rm("test_independent_blocks_exact", recursive=true, force=true)
 
-    global ib_geno_independent = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+    global ib_geno_independent = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
     independent_model = build_model("y1 = intercept + ib_geno_independent", 1.0)
     independent_output = runMCMC(
         independent_model,
-        phenotypes;
+        phenotypes; shared_genotypes=false,
         chain_length=6,
         output_samples_frequency=10,
         output_folder="test_independent_blocks_enabled",
@@ -146,22 +146,22 @@ end
     @test independent_model.MCMCinfo.independent_blocks == true
     isdir("test_independent_blocks_enabled") && rm("test_independent_blocks_enabled", recursive=true, force=true)
 
-    global ib_geno_requires_blocks = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+    global ib_geno_requires_blocks = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
     requires_blocks_model = build_model("y1 = intercept + ib_geno_requires_blocks", 1.0)
     @test_throws ErrorException runMCMC(
         requires_blocks_model,
-        phenotypes;
+        phenotypes; shared_genotypes=false,
         chain_length=6,
         output_folder="test_independent_blocks_requires_blocks",
         independent_blocks=true,
     )
     isdir("test_independent_blocks_requires_blocks") && rm("test_independent_blocks_requires_blocks", recursive=true, force=true)
 
-    global ib_geno_explicit = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+    global ib_geno_explicit = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
     explicit_model = build_model("y1 = intercept + ib_geno_explicit", 1.0)
     explicit_output = runMCMC(
         explicit_model,
-        phenotypes;
+        phenotypes; shared_genotypes=false,
         chain_length=6,
         output_samples_frequency=10,
         output_folder="test_independent_blocks_explicit",
@@ -174,11 +174,11 @@ end
     @test explicit_model.MCMCinfo.chain_length == 6
     isdir("test_independent_blocks_explicit") && rm("test_independent_blocks_explicit", recursive=true, force=true)
 
-    global ib_geno_bayesr = get_genotypes(genofile, 1.0, separator=',', method="BayesR")
+    global ib_geno_bayesr = get_genotypes(genofile, 1.0, separator=',', method="BayesR"; copy_genotypes=true)
     bayesr_model = build_model("y1 = intercept + ib_geno_bayesr", 1.0)
     bayesr_output = runMCMC(
         bayesr_model,
-        phenotypes;
+        phenotypes; shared_genotypes=false,
         chain_length=6,
         output_samples_frequency=10,
         output_folder="test_independent_blocks_bayesr",
@@ -195,11 +195,11 @@ end
     isdir("test_independent_blocks_bayesr") && rm("test_independent_blocks_bayesr", recursive=true, force=true)
 
     for bad_blocks in ([2, 4], [1, 3, 3], [3, 1], [1, 10])
-        global ib_geno_bad_blocks = get_genotypes(genofile, 1.0, separator=',', method="BayesC")
+        global ib_geno_bad_blocks = get_genotypes(genofile, 1.0, separator=',', method="BayesC"; copy_genotypes=true)
         bad_blocks_model = build_model("y1 = intercept + ib_geno_bad_blocks", 1.0)
         @test_throws ErrorException runMCMC(
             bad_blocks_model,
-            phenotypes;
+            phenotypes; shared_genotypes=false,
             chain_length=6,
             output_folder="test_independent_blocks_bad",
             fast_blocks=bad_blocks,
