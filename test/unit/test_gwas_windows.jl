@@ -17,7 +17,7 @@ output = runMCMC(model, phenotypes,
                 output_samples_frequency=10,
                 outputEBV=true,
                 output_folder="test_gwas_win",
-                seed=123)
+                seed=123, shared_genotypes=false)
 
 marker_file = "test_gwas_win/MCMC_samples_marker_effects_geno_y1.txt"
 

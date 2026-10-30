@@ -14,7 +14,7 @@ phenotypes = CSV.read(phenofile, DataFrame, delim=',', missingstring=["NA"])
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_bayesb",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "marker effects geno")
     @test haskey(output, "location parameters")
@@ -30,7 +30,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_bayesa",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "marker effects geno")
     @test haskey(output, "location parameters")
@@ -46,7 +46,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_bayesl",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "marker effects geno")
     @test haskey(output, "location parameters")
@@ -62,7 +62,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_gblup",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     rm("test_gblup", recursive=true)

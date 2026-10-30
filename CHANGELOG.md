@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-10-30
+
+### Changed
+
+- Dense matrix input defaults to `copy_genotypes=false`: JWAS adopts a matching-
+  precision matrix and may mutate it during imputation and centering. Set
+  `copy_genotypes=true` to preserve the input or allow precision conversion.
+  File, DataFrame and streaming imports continue allocating their own storage.
+- `runMCMC` defaults to `shared_genotypes=true` for genotype analyses. Contiguous
+  training, prediction and SNP-block views share one dense parent. The supported
+  path is one single-trait BayesC term with matching precision and unit residual
+  weights. Other marker models or repeated/permuted/noncontiguous rows require
+  `shared_genotypes=false` to use copying alignment. No-marker models are unaffected.
+- Block residual updates use precision-matched multipliers for Float32 BLAS
+  dispatch. SNP blocks and diagonal products avoid unnecessary matrix/column copies.
+
 ## 2026-02-26
 
 ### Added

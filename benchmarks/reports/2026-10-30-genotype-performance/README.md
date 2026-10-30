@@ -28,7 +28,7 @@ Float64 was effectively unchanged (144.8 versus 144.1 microseconds). The
 numerical results pass an approximate-equality check. These are local kernel
 measurements, not whole-chain or production-data speedup claims.
 
-The default full package suite passed 925 checks. Focused tests also cover
+The full package suite passed 1061 checks with the new defaults. Focused tests also cover
 Float32/Float64 residual reconstruction, matrix ownership, contiguous selection
 guards, shared block parents, annotations supported by the base, and production
 output agreement across seeds 73/123/456 and both precisions.

@@ -261,7 +261,7 @@ println()
                                burnin=10,
                                output_samples_frequency=10,
                                output_folder="results",
-                               seed=123)
+                               seed=123, shared_genotypes=false)
                 
                 @test haskey(output, "location parameters")
                 @test haskey(output, "residual variance")
@@ -279,7 +279,7 @@ println()
                 output = runMCMC(model, phenotypes,
                                chain_length=50,
                                output_folder="test_results_temp",
-                               seed=123)
+                               seed=123, shared_genotypes=false)
                 
                 @test isdir("test_results_temp")
                 @test isfile("test_results_temp/location_parameters.txt")
@@ -293,12 +293,12 @@ println()
                 global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP")
                 model1 = build_model("y1 = intercept + geno", 1.0)
                 out1 = runMCMC(model1, phenotypes, chain_length=50, 
-                              output_folder="temp1", seed=999)
+                              output_folder="temp1", seed=999, shared_genotypes=false)
                 
                 global geno = get_genotypes(genofile, 1.0, separator=',', method="RR-BLUP")
                 model2 = build_model("y1 = intercept + geno", 1.0)
                 out2 = runMCMC(model2, phenotypes, chain_length=50,
-                              output_folder="temp2", seed=999)
+                              output_folder="temp2", seed=999, shared_genotypes=false)
                 
                 # Results should be identical with same seed
                 @test out1["residual variance"][1, :Estimate] ≈ 
@@ -325,7 +325,7 @@ println()
                 model = build_model("y1 = intercept + geno", 1.0)
                 
                 output = runMCMC(model, phenotypes, chain_length=50,
-                               output_folder="gwas_test", seed=123)
+                               output_folder="gwas_test", seed=123, shared_genotypes=false)
                 
                 gwas_result = GWAS("gwas_test/MCMC_samples_marker_effects_geno_y1.txt")
                 
@@ -362,7 +362,7 @@ println()
                 # Should handle missing values without error
                 model = build_model("y1 = intercept", 1.0)
                 output = runMCMC(model, phenotypes, chain_length=10,
-                                output_folder="missing_test", seed=123)
+                                output_folder="missing_test", seed=123, shared_genotypes=false)
                 @test haskey(output, "location parameters")
                 
                 # Cleanup

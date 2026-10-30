@@ -29,7 +29,7 @@ end
                     burnin=20,
                     output_samples_frequency=10,
                     output_folder="test_repro",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test haskey(output, "location parameters")
     @test haskey(output, "residual variance")
@@ -46,7 +46,7 @@ end
                     chain_length=50,
                     output_samples_frequency=10,
                     output_folder="test_multi_samples",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test isfile("test_multi_samples/MCMC_samples_y1.intercept.txt")
     @test isfile("test_multi_samples/MCMC_samples_y1.x1.txt")
@@ -76,7 +76,7 @@ end
                     chain_length=50,
                     output_samples_frequency=10,
                     output_folder="test_mt_describe",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     # describe() should work after MCMC (MCMCinfo is set)
     @test describe(model) === nothing

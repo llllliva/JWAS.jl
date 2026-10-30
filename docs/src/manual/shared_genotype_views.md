@@ -1,24 +1,28 @@
 # Shared genotype storage
 
-For a dense, single-trait BayesC analysis, opt in to one genotype allocation
+By default, dense single-trait BayesC analyses use one genotype allocation
 shared by training rows, prediction rows, and SNP blocks:
 
 ```julia
 geno = get_genotypes(X, 1.0; method="BayesC", Pi=0.95,
-    copy_genotypes=false, quality_control=false, double_precision=false)
+    quality_control=false, double_precision=false)
 # X must be Matrix{Float32}; set geno.obsID and geno.markerID in X order.
 model = build_model("y = intercept + geno", 1.0)
 outputEBV(model, geno.obsID)
-runMCMC(model, phenotypes; shared_genotypes=true, double_precision=false,
+runMCMC(model, phenotypes; double_precision=false,
     fast_blocks=200, output_folder="shared_results")
 report = JWAS.genotype_storage_report(only(model.M))
 @assert report.backing_matrix_count == 1
 ```
 
-`copy_genotypes=false` transfers preprocessing ownership: imputation and
-centering can modify `X` in place. Do not mutate it while the model uses it.
+`copy_genotypes=false` is the default and transfers preprocessing ownership:
+imputation and centering can modify `X` in place. Do not mutate it while the model uses it.
 With QC enabled, marker filtering can still allocate a replacement matrix.
-Both options default to the existing copying behavior.
+The defaults are `copy_genotypes=false` and `shared_genotypes=true`.
+Use `copy_genotypes=true` to preserve a caller-owned matrix or allow precision
+conversion, and `shared_genotypes=false` for the previous copying alignment.
+The ownership option applies only to matrix input; files, DataFrames, and
+streaming imports continue allocating their own storage.
 
 Training and output IDs must each form a nonempty contiguous range in genotype
 order. Construct training rows first and prediction-only rows afterward; keep
@@ -29,7 +33,10 @@ views still retain the same parent matrix.
 Matching Float64 import and MCMC precision is also supported. Shared mode rejects
 multiple genotype terms, multiple traits, relationship matrices, single-step,
 random regression, streaming storage, other methods, and non-unit residual
-weights. These restrictions apply only when `shared_genotypes=true`.
+weights. These restrictions apply by default; explicitly set
+`shared_genotypes=false` for those marker analyses or noncontiguous/repeated
+rows. Conventional analyses without markers have no genotype storage to share
+and are unaffected by this option.
 
 The memory guard includes the full retained dense parent and block Gram caches.
 Views do not provide out-of-core storage. `genotype_storage_report` counts unique

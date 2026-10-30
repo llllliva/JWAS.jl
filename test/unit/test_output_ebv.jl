@@ -29,7 +29,7 @@ end
                         output_samples_frequency=10,
                         outputEBV=true,
                         output_folder="test_ebv_output",
-                        seed=123)
+                        seed=123, shared_genotypes=false)
 
         @test haskey(output, "EBV_y1")
         ebv_df = output["EBV_y1"]
@@ -53,7 +53,7 @@ end
                         outputEBV=true,
                         output_heritability=true,
                         output_folder="test_ebv_h2",
-                        seed=123)
+                        seed=123, shared_genotypes=false)
 
         @test haskey(output, "EBV_y1")
         @test haskey(output, "heritability")
@@ -76,7 +76,7 @@ end
                     chain_length=50,
                     output_samples_frequency=10,
                     output_folder="test_mcmc_samples",
-                    seed=123)
+                    seed=123, shared_genotypes=false)
 
     @test isfile("test_mcmc_samples/MCMC_samples_y1.intercept.txt")
     rm("test_mcmc_samples", recursive=true)
@@ -104,7 +104,7 @@ end
                                         center=true)
             model_dense = build_model("y1 = intercept + geno", 1.0)
             outputEBV(model_dense, output_ids)
-            dense = runMCMC(model_dense, pheno_subset;
+            dense = runMCMC(model_dense, pheno_subset; shared_genotypes=false,
                             chain_length=40,
                             burnin=10,
                             output_samples_frequency=10,
@@ -120,7 +120,7 @@ end
                                         storage=:stream)
             model_stream = build_model("y1 = intercept + geno", 1.0)
             outputEBV(model_stream, output_ids)
-            stream = runMCMC(model_stream, pheno_subset;
+            stream = runMCMC(model_stream, pheno_subset; shared_genotypes=false,
                              chain_length=40,
                              burnin=10,
                              output_samples_frequency=10,

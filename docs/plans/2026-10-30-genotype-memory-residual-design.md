@@ -1,8 +1,12 @@
 # Genotype memory and residual performance
 
 Start from origin/master (a619a30222b884f9fc0a6030dde375de35c9f841).
-Include only opt-in dense matrix adoption, contiguous genotype row/block views,
-and precision-matched block residual updates. Keep existing copying defaults.
+Include only dense matrix adoption, contiguous genotype row/block views,
+and precision-matched block residual updates. Use `copy_genotypes=false` and `shared_genotypes=true` by default.
+Explicit opt-outs retain copying. File/DataFrame parsing
+and streaming imports ignore the matrix-ownership option. Shared alignment
+constraints now apply by default to marker analyses; conventional no-marker
+analyses have no genotype storage to share.
 Do not introduce annotation models, BayesR, multiclass models, sampling schedules,
 or independent-block sampling absent from this base.
 

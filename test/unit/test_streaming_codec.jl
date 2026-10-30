@@ -70,7 +70,7 @@ end
                                             quality_control=false,
                                             center=true)
                 model_dense = build_model("y1 = intercept + geno", 1.0)
-                out_dense = runMCMC(model_dense, phenotypes;
+                out_dense = runMCMC(model_dense, phenotypes; shared_genotypes=false,
                                     chain_length=40,
                                     burnin=10,
                                     output_samples_frequency=10,
@@ -84,7 +84,7 @@ end
                                             method="BayesC",
                                             storage=:stream)
                 model_stream = build_model("y1 = intercept + geno", 1.0)
-                out_stream = runMCMC(model_stream, phenotypes;
+                out_stream = runMCMC(model_stream, phenotypes; shared_genotypes=false,
                                      chain_length=40,
                                      burnin=10,
                                      output_samples_frequency=10,

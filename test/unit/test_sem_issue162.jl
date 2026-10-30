@@ -12,7 +12,7 @@ using Test, JWAS, DataFrames, CSV, JWAS.Datasets
     model = build_model("y1 = intercept + genotypes\ny2 = intercept + genotypes", R)
 
     causal_structure = [0.0 0.0; 1.0 0.0]
-    output = runMCMC(model, phenotypes;
+    output = runMCMC(model, phenotypes; shared_genotypes=false,
                      causal_structure=causal_structure,
                      chain_length=20,
                      burnin=5,

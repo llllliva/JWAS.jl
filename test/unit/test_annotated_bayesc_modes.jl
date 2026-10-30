@@ -34,7 +34,7 @@ end
 
 function run_single_trait_mcmc(geno, phenotypes, outdir; fast_blocks=false)
     model = build_model("y1 = intercept + geno", 1.0)
-    return runMCMC(model, phenotypes;
+    return runMCMC(model, phenotypes; shared_genotypes=false,
                    chain_length=40,
                    burnin=10,
                    output_samples_frequency=5,
@@ -127,7 +127,7 @@ end
                                             storage=:stream,
                                             annotations=annotations)
                 model = build_model("y1 = intercept + geno", 1.0)
-                @test_throws ErrorException runMCMC(model, phenotypes;
+                @test_throws ErrorException runMCMC(model, phenotypes; shared_genotypes=false,
                                                     chain_length=40,
                                                     burnin=10,
                                                     output_samples_frequency=5,

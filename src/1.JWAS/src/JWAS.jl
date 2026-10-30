@@ -139,7 +139,7 @@ export dataset
 * Miscellaneous Options
   * Print out the model information in REPL if `printout_model_info`=true; print out the monte carlo mean in REPL with `printout_frequency`,
     defaulting to `false`.
-  * `shared_genotypes=true` uses contiguous row views for one dense single-trait BayesC term. Use matching precision and unit residual weights; repeated/permuted rows, single-step and random regression are rejected. Default: `false`.
+  * `shared_genotypes=true` uses contiguous row views for one dense single-trait BayesC term. Use matching precision and unit residual weights; repeated/permuted rows, single-step and random regression are rejected. Default: `true`; set it to `false` for copying alignment or unsupported marker models.
   * If `seed`, defaulting to `false`, is provided, a reproducible sequence of numbers will be generated for random number generation.
   * If `big_memory`=true, defaulting to `false`, a machine with  lots of memory is assumed which may speed up the analysis.
   * `memory_guard` controls the marker-memory precheck before MCMC (`:error`, `:warn`, `:off`; default `:error`).
@@ -174,7 +174,7 @@ function runMCMC(mme::MME,df;
                 big_memory                      = false,
                 double_precision                = false,
                 fast_blocks                     = false,
-                shared_genotypes::Bool          = false,
+                shared_genotypes::Bool          = true,
                 memory_guard                    = :error,
                 memory_guard_ratio::Float64     = 0.80,
                 #MCMC samples (defaut to marker effects and hyperparametes (variance componets))
@@ -190,6 +190,8 @@ function runMCMC(mme::MME,df;
                 categorical_trait               = false,  #this has been moved to build_model()
                 censored_trait                  = false)  #this has been moved to build_model()
 
+    # Conventional models have no genotype storage to share.
+    shared_genotypes = shared_genotypes && mme.M != 0
     if shared_genotypes
         validate_shared_genotypes(mme; single_step_analysis, RRM, double_precision)
     end

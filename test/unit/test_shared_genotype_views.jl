@@ -33,9 +33,10 @@ function shared_genotype_case(shared,method,fast,seed; annotated=false,precision
     observations = 0.3 .* Float64.(X[:,1]) .+ 0.1 .* collect(1:n)./n .+ randn(rng,n)
     pi = 0.65
     annotation = annotated ? Float64.(hcat(isodd.(1:p),mod.(1:p,3).==0)) : false
+    input_options = shared_override === nothing ? (;) : (;copy_genotypes=!shared)
     global shared_genotype_test_genotypes = get_genotypes(X,1.0;method,Pi=pi,
         quality_control=false,double_precision=(precision===Float64),
-        copy_genotypes=!shared,annotations=annotation)
+        input_options...,annotations=annotation)
     g = shared_genotype_test_genotypes
     g.obsID .= ids; g.markerID .= markers
     owned = g.genotypes
@@ -50,8 +51,9 @@ function shared_genotype_case(shared,method,fast,seed; annotated=false,precision
     outputEBV(model,ids[prediction_rows])
     outdir = folder === nothing ? joinpath(mktempdir(),"mcmc") : folder
     chain = fast === false ? outer : outer*fast
+    alignment_options = shared_override === nothing ? (;) : (;shared_genotypes=shared_override)
     timing = @timed runMCMC(model,ph;chain_length=chain,burnin=(fast === false ? burnin : burnin*fast),output_samples_frequency=freq,
-        fast_blocks=fast,shared_genotypes=shared_override,seed,output_folder=outdir,
+        fast_blocks=fast,alignment_options...,seed,output_folder=outdir,
         double_precision=(precision===Float64),heterogeneous_residuals=(weights!==false),
         output_heritability=false,printout_model_info=false,printout_frequency=outer+1)
     report = JWAS.genotype_storage_report(g)
@@ -105,6 +107,10 @@ end
         shared = shared_genotype_case(true,method,fast,seed;precision)
         compare_shared_genotype_outputs(copied,shared)
     end
+    # Omitting the keyword must take the same sharing path as explicit true.
+    default_shared = shared_genotype_case(true,"BayesC",5,123;shared_override=nothing)
+    @test default_shared.report.training_is_view
+    @test default_shared.report.backing_matrix_count == 1
     for method in ("BayesC",)
         copied = shared_genotype_case(false,method,5,123;annotated=true)
         shared = shared_genotype_case(true,method,5,123;annotated=true)
@@ -128,4 +134,16 @@ end
     @test_throws ErrorException JWAS.validate_shared_genotypes(model;RRM=ones(3,2))
     g.method = "BayesB"
     @test_throws ErrorException JWAS.validate_shared_genotypes(model)
+end
+
+@testset "Default sharing behavior" begin
+    @test_throws ErrorException shared_genotype_case(true,"BayesC",5,123;
+        selected_train=[1,3,5],shared_override=nothing)
+    model = build_model("y = intercept",1.0)
+    ph = DataFrame(ID=string.(1:8),y=Float64[1,3,2,4,2,5,1,4])
+    mktempdir() do dir
+        output = runMCMC(model,ph;chain_length=20,burnin=5,seed=73,
+                         output_folder=joinpath(dir,"mcmc"),printout_model_info=false)
+        @test haskey(output,"residual variance")
+    end
 end
