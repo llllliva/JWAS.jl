@@ -1,0 +1,13 @@
+{
+  "cases": 72,
+  "all_pass": true,
+  "all_exact": true,
+  "max_abs": {
+    "EBV": 0.0,
+    "PEV": 0.0,
+    "Estimate": 0.0,
+    "SD": 0.0,
+    "Model_Frequency": 0.0
+  },
+  "failures": []
+}
