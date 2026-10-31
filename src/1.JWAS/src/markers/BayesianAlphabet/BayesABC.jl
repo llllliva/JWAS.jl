@@ -1,3 +1,28 @@
+# Preserve upstream arithmetic unless fast residual updates are requested.
+function bayesc_block_residual!(residual, block, delta, fast::Bool)
+    if fast
+        mul!(residual,block,delta,one(eltype(residual)),one(eltype(residual)))
+    else
+        mul!(residual,block,delta,1.0,1.0)
+    end
+    nothing
+end
+
+# Sequential multi-trait upstream computes the product before adding residuals.
+# A reusable workspace preserves that order without allocating a full new vector.
+function bayesc_mt_block_residual!(residual,block,delta,workspace,fast::Bool)
+    if fast
+        bayesc_block_residual!(residual,block,delta,true)
+    elseif eltype(residual) === eltype(block) && eltype(block) === eltype(delta)
+        mul!(workspace,block,delta)
+        residual .+= workspace
+    else
+        # Keep upstream promotion/evaluation for legacy mixed-precision calls.
+        residual[:] = residual + block*delta
+    end
+    nothing
+end
+
 function megaBayesABC!(genotypes,wArray,vare,locus_effect_variances)
     Threads.@threads for i in 1:length(wArray) #ntraits
          BayesABC!(genotypes.mArray,genotypes.mRinvArray,genotypes.mpRinvm,
@@ -108,24 +133,24 @@ function BayesABC_streaming!(backend,xpRinvx,
 end
 
 
-function BayesABC_block!(genotypes,ycorr,vare,locus_effect_variances,Rinv=ones(eltype(ycorr),length(ycorr)),independent_blocks=false)
+function BayesABC_block!(genotypes,ycorr,vare,locus_effect_variances,Rinv=ones(eltype(ycorr),length(ycorr)),independent_blocks=false;fast_residual_updates::Bool=false)
     BayesABC_block!(genotypes.MArray,genotypes.mpRinvm,
               genotypes.genotypes,genotypes.MpRinvM,
               ycorr,genotypes.α[1],genotypes.β[1],genotypes.δ[1],vare,
-              locus_effect_variances,genotypes.π,Rinv,independent_blocks)
+              locus_effect_variances,genotypes.π,Rinv,independent_blocks;fast_residual_updates)
 end
 
 function BayesABC_block!(XArray,xpRinvx,
                    X, XpRinvX,
                    yCorr,
                    α,β,δ,
-                   vare,varEffects,π,Rinv,independent_blocks=false)
+                   vare,varEffects,π,Rinv,independent_blocks=false;fast_residual_updates::Bool=false)
     if independent_blocks == true
         return BayesABC_block_independent!(XArray,xpRinvx,
                                            X,XpRinvX,
                                            yCorr,
                                            α,β,δ,
-                                           vare,varEffects,π,Rinv)
+                                           vare,varEffects,π,Rinv;fast_residual_updates)
     end
 
     nMarkers      = length(α)
@@ -181,7 +206,7 @@ function BayesABC_block!(XArray,xpRinvx,
         @views begin
             αold_view = view(αold_block,1:block_size)
             αold_view .-= α[block_range]
-            mul!(yCorr,XArray[i],αold_view,1.0,1.0)
+            bayesc_block_residual!(yCorr,XArray[i],αold_view,fast_residual_updates)
         end
         start_pos += block_size
     end
@@ -191,7 +216,7 @@ function BayesABC_block_independent!(XArray,xpRinvx,
                                      X, XpRinvX,
                                      yCorr,
                                      α,β,δ,
-                                     vare,varEffects,π,Rinv)
+                                     vare,varEffects,π,Rinv;fast_residual_updates::Bool=false)
     nMarkers      = length(α)
     pi_vec        = bayesabc_pi_vector(π, nMarkers)
     logPi         = log.(pi_vec)
@@ -249,7 +274,7 @@ function BayesABC_block_independent!(XArray,xpRinvx,
     end
 
     for i in 1:nblocks
-        mul!(yCorr,XArray[i],block_deltas[i],1.0,1.0)
+        bayesc_block_residual!(yCorr,XArray[i],block_deltas[i],fast_residual_updates)
     end
     return nothing
 end

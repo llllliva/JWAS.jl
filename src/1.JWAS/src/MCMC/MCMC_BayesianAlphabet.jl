@@ -1,7 +1,7 @@
 ################################################################################
 #MCMC for RR-BLUP, GBLUP, BayesABC, and conventional (no markers) methods
 ################################################################################
-function MCMC_BayesianAlphabet(mme,df)
+function MCMC_BayesianAlphabet(mme,df;fast_residual_updates::Bool=false)
     ############################################################################
     chain_length             = mme.MCMCinfo.chain_length
     burnin                   = mme.MCMCinfo.burnin
@@ -57,7 +57,7 @@ function MCMC_BayesianAlphabet(mme,df)
                 Mi.mpRinvm = Mi.stream_backend.xpRinvx
                 Mi.MArray = Mi.MRinvArray = Mi.MpRinvM = false
             else
-                mGibbs    = GibbsMats(Mi.genotypes,invweights,fast_blocks=mme.MCMCinfo.fast_blocks)
+                mGibbs    = GibbsMats(Mi.genotypes,invweights;fast_blocks=mme.MCMCinfo.fast_blocks,use_views=(Mi.method == "BayesC"))
                 Mi.mArray,Mi.mRinvArray,Mi.mpRinvm  = mGibbs.xArray,mGibbs.xRinvArray,mGibbs.xpRinvx
                 if fast_blocks != false
                     Mi.MArray  = mGibbs.XArray
@@ -239,7 +239,7 @@ function MCMC_BayesianAlphabet(mme,df)
                             if fast_blocks == false
                                 MTBayesABC!(Mi,wArray,mme.R.val,locus_effect_variances,mme.nModels)
                             else
-                                MTBayesABC_block!(Mi,wArray,mme.R.val,locus_effect_variances,invweights,mme.MCMCinfo.independent_blocks)
+                                MTBayesABC_block!(Mi,wArray,mme.R.val,locus_effect_variances,invweights,mme.MCMCinfo.independent_blocks;fast_residual_updates)
                             end
                         end
                     else
@@ -250,7 +250,7 @@ function MCMC_BayesianAlphabet(mme,df)
                                 BayesABC!(Mi,ycorr,mme.R.val,locus_effect_variances)
                             end
                         else
-                            BayesABC_block!(Mi,ycorr,mme.R.val,locus_effect_variances,invweights,mme.MCMCinfo.independent_blocks)
+                            BayesABC_block!(Mi,ycorr,mme.R.val,locus_effect_variances,invweights,mme.MCMCinfo.independent_blocks;fast_residual_updates)
                         end
                     end
                 elseif Mi.method == "BayesR"
