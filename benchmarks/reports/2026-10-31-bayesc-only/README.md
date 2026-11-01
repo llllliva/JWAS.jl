@@ -16,16 +16,18 @@ Noncontiguous/repeated row selections need shared_genotypes=false; integer or
 mismatched-precision matrix inputs need copy_genotypes=true for conversion.
 File/DataFrame loading and unsupported model modes retain upstream behavior.
 
-Compatibility residual arithmetic is the default. Faster precision-matched
-in-place residual arithmetic is available only with fast_residual_updates=true.
-That option can alter seeded trajectories through rounding. It does not change
-the statistical model or schedule and is distinct from fast_blocks.
+BayesC uses one in-place block residual path with multipliers matching the
+genotype element type. There is no residual-mode option. Sequential MT updates
+copy only the current alpha block and need no product workspace. The residual
+buffer retains its element type. Other methods retain upstream arithmetic.
+Rounding can alter seeded trajectories; the statistical model and schedule
+are unchanged.
 
 ## Regression verification
 
-All 2397 full-suite checks passed, including the unchanged 988 legacy checks
-and new shared-memory, ST/MT residual and mixed-precision coverage. Documentation
-built successfully; no deployment. Optional simulated-omics integration tests
+All 1767 full-suite checks passed, covering the unchanged 988 legacy checks plus shared-memory,
+ST/MT residual reconstruction, mixed-precision multipliers and legacy BayesB
+arithmetic. Documentation built successfully; no deployment. Optional simulated-omics integration tests
 and other runtime/OS combinations were not run.
 
 ## Direct prediction comparison
@@ -44,8 +46,11 @@ Fixtures use 40 genotyped animals, 28 training animals, 19 markers, 500 outer
 iterations, 150 burn-in, thinning 10, and 35 saved draws. The same priors,
 fixed FARM and random LITTER effects, input precision and block schedule are used.
 
-All 72 cases matched exactly for EBV, PEV, marker posterior mean/SD and model
-frequency. The maximum absolute differences in summary.json are all zero.
+All 72 cases passed absolute/relative tolerance 1e-4 for EBV, PEV, marker
+posterior mean/SD and model frequency. Maximum absolute differences were
+1.108886e-6 (EBV), 8.178929e-7 (PEV), 5.1e-7 (marker mean), and 3.3e-7
+(marker SD). Model frequencies matched exactly. All 18 ordinary cases matched
+exactly; 20 of 54 block cases matched exactly. See summary.json and summary.csv.
 Expected animal/marker counts and unique matching key sets were asserted before
 joining by Trait/ID and Trait/Marker_ID. Marker quoting was normalized; sample
 joined rows were inspected. Aligned tables are generated locally and ignored
@@ -70,6 +75,6 @@ upstream/candidate arguments, selecting the desired checkout with --project.
 Compare exports with benchmarks/compare_bayesc_predictions.py followed by the
 upstream directory, candidate directory and report directory.
 Run benchmarks/bayesc_storage_comparison.jl for storage measurements.
-The ordinary unit suite includes shared-memory and residual-mode checks.
+The ordinary unit suite includes shared-memory and residual reconstruction checks.
 Local execution used --compiled-modules=existing, --startup-file=no and
 GKSwstype=100 to avoid cache writes and graphics initialization.

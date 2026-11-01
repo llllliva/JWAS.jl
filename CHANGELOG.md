@@ -12,10 +12,10 @@ All notable changes to this project are documented in this file.
   views. Other methods retain upstream copying defaults.
 - Ordinary and fast-block BayesC, multi-trait samplers I/II, and sequential/
   independent blocks are supported. Priors and sampling schedules are retained.
-- Upstream-compatible residual arithmetic remains the default. Optional
-  fast_residual_updates=true enables in-place precision-matched BLAS arithmetic.
-- Sequential multi-trait blocks avoid full marker-effect copies per block and
-  reuse product workspaces without changing compatible arithmetic order.
+- BayesC blocks use one in-place residual path with genotype-typed BLAS
+  multipliers. Multi-trait sequential updates copy only the current alpha block
+  and do not allocate a residual product workspace. Seeded chains can differ
+  from upstream through floating-point rounding.
 
 ## 2026-05-01
 

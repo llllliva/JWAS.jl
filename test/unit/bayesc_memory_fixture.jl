@@ -1,7 +1,7 @@
 using Test, JWAS, DataFrames, CSV, Random, Statistics, LinearAlgebra
 
 function bayesc_memory_case(;traits=1,sampler=:I,precision=Float32,mode="ordinary",
-    seed=73,annotated=false,copying=false,fast_residuals=false,upstream=false,
+    seed=73,annotated=false,copying=false,upstream=false,
     n=36,t=24,p=17,outer=200,burnin=50,freq=10,folder=nothing,prediction_all=false)
     rng=MersenneTwister(20261031)
     X=precision.(rand(rng,0:2,n,p))
@@ -16,7 +16,6 @@ function bayesc_memory_case(;traits=1,sampler=:I,precision=Float32,mode="ordinar
     R=traits==1 ? 1.0 : [1.0 0.1;0.1 1.0]
     ownership=(!upstream && copying) ? (;copy_genotypes=true) : (;)
     alignment=(!upstream && copying) ? (;shared_genotypes=false) : (;)
-    arithmetic=(!upstream && fast_residuals) ? (;fast_residual_updates=true) : (;)
     global bayesc_memory_genotypes=get_genotypes(X,G;method="BayesC",Pi=pi,
         quality_control=false,double_precision=(precision===Float64),
         annotations=annotation,multi_trait_sampler=sampler,ownership...)
@@ -41,7 +40,7 @@ function bayesc_memory_case(;traits=1,sampler=:I,precision=Float32,mode="ordinar
         burnin,output_samples_frequency=freq,seed,fast_blocks=fast,
         independent_blocks=(mode=="independent"),double_precision=(precision===Float64),
         output_folder=outdir,output_heritability=false,printout_model_info=false,
-        printout_frequency=outer+1,alignment...,arithmetic...)
+        printout_frequency=outer+1,alignment...)
     animals=DataFrame[]
     for trait in 1:traits
         frame=CSV.read(joinpath(outdir,"EBV_y$(trait).txt"),DataFrame;types=Dict(:ID=>String))

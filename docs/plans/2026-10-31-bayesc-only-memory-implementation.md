@@ -10,33 +10,31 @@ Review branch: performance/bayesc-only-shared-views.
 - BayesC-only matrix-adoption defaults and scoped automatic shared storage.
 - Contiguous parent-backed training, prediction and block views, with parent-aware
   memory accounting. Other methods retain copying/storage defaults.
-- Compatibility residual arithmetic by default; optional fast_residual_updates
-  enables precision-matched in-place BLAS for BayesC blocks.
-- Sequential MT block-sized alpha copies and reusable product workspaces;
-  upstream product-then-add order is retained. Legacy mixed-precision calls
-  fall back to the original expression to preserve promotion/evaluation.
+- One in-place BayesC block residual path with genotype-typed BLAS multipliers;
+  no user residual-mode option and no product workspaces.
+- Sequential MT copies only the current alpha block. Residual buffers keep
+  their existing element type. Shared ABC samplers select legacy arithmetic
+  internally for other methods to keep the scope confined to BayesC.
 
 BayesR and MTBayesR source files, prediction output code, priors, dependencies,
 package version and sampling schedules are unchanged from upstream.
 
 ## Verification
 
-The untouched legacy suite passed all 988 checks without modifying its test
-cases or adding opt-outs. New focused storage/production tests passed 1089
-checks; single-/multi-trait residual reconstruction passed 312 checks across
-both precisions, both arithmetic modes, both block modes and three seeds.
-Eight additional mixed-precision compatibility checks passed exactly.
+All 1767 full-suite checks passed, including the unchanged 988 legacy checks, default-versus-copied
+storage comparisons, ST/MT residual reconstruction across both precisions,
+sequential/independent blocks and three seeds, mixed-precision genotype-typed
+multipliers, and preservation of BayesB wrapper arithmetic. Duplicate arithmetic
+mode cases were removed with the public switch. No original regression test
+assertions were changed or disabled.
 
-The final combined full suite passed all 2397 checks, including the eight
-additional mixed-precision checks. No original regression test assertions were
-changed or disabled.
-
-All 72 direct upstream-versus-candidate prediction cases matched exactly:
-single-trait plus two-trait samplers I/II, both precisions, ordinary/sequential/
-independent updates, three seeds, annotations, partial trait missingness and
-held-out animals. EBV, PEV, marker posterior mean/SD and model frequencies had
-zero maximum difference in the default compatibility arithmetic mode.
-Faster arithmetic is deliberately opt-in and is not claimed bitwise identical.
+All 72 keyed upstream-versus-candidate prediction cases passed absolute/relative
+1e-4 tolerance: single-trait plus two-trait samplers I/II, both precisions,
+ordinary/sequential/independent updates, three seeds, annotations, partial trait
+missingness and held-out animals. Maximum EBV difference was 1.108886e-6;
+PEV 8.178929e-7, marker mean 5.1e-7 and marker SD 3.3e-7. Model frequencies
+matched exactly. All 18 ordinary cases and 20 of 54 block cases matched exactly.
+The unified block arithmetic is not claimed bitwise identical to upstream.
 
 Eight production storage comparisons (one/two traits, ordinary/sequential,
 two seeds) reduced retained genotype payload from 230272 to 131584 bytes,

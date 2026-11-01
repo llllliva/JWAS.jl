@@ -1,10 +1,9 @@
 include("bayesc_memory_fixture.jl")
 @testset "BayesC shared memory, ST/MT and ordinary/fast blocks" begin
     for traits in (1,2), sampler in (traits==1 ? (:I,) : (:I,:II)),
-        precision in (Float32,Float64), mode in ("ordinary","sequential","independent"),
-        fast_residuals in (false,true)
-        copied=bayesc_memory_case(;traits,sampler,precision,mode,fast_residuals,copying=true)
-        shared=bayesc_memory_case(;traits,sampler,precision,mode,fast_residuals)
+        precision in (Float32,Float64), mode in ("ordinary","sequential","independent")
+        copied=bayesc_memory_case(;traits,sampler,precision,mode,copying=true)
+        shared=bayesc_memory_case(;traits,sampler,precision,mode)
         compare_bayesc_memory(copied,shared)
     end
     for sampler in (:I,:II), precision in (Float32,Float64)

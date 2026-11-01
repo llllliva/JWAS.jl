@@ -1,7 +1,7 @@
 ################################################################################
 #MCMC for RR-BLUP, GBLUP, BayesABC, and conventional (no markers) methods
 ################################################################################
-function MCMC_BayesianAlphabet(mme,df;fast_residual_updates::Bool=false)
+function MCMC_BayesianAlphabet(mme,df)
     ############################################################################
     chain_length             = mme.MCMCinfo.chain_length
     burnin                   = mme.MCMCinfo.burnin
@@ -239,7 +239,7 @@ function MCMC_BayesianAlphabet(mme,df;fast_residual_updates::Bool=false)
                             if fast_blocks == false
                                 MTBayesABC!(Mi,wArray,mme.R.val,locus_effect_variances,mme.nModels)
                             else
-                                MTBayesABC_block!(Mi,wArray,mme.R.val,locus_effect_variances,invweights,mme.MCMCinfo.independent_blocks;fast_residual_updates)
+                                MTBayesABC_block!(Mi,wArray,mme.R.val,locus_effect_variances,invweights,mme.MCMCinfo.independent_blocks)
                             end
                         end
                     else
@@ -250,7 +250,7 @@ function MCMC_BayesianAlphabet(mme,df;fast_residual_updates::Bool=false)
                                 BayesABC!(Mi,ycorr,mme.R.val,locus_effect_variances)
                             end
                         else
-                            BayesABC_block!(Mi,ycorr,mme.R.val,locus_effect_variances,invweights,mme.MCMCinfo.independent_blocks;fast_residual_updates)
+                            BayesABC_block!(Mi,ycorr,mme.R.val,locus_effect_variances,invweights,mme.MCMCinfo.independent_blocks)
                         end
                     end
                 elseif Mi.method == "BayesR"

@@ -156,7 +156,7 @@ end
   * Print out the model information in REPL if `printout_model_info`=true; print out the monte carlo mean in REPL with `printout_frequency`,
     defaulting to `false`.
   * shared_genotypes=true defaults on for one dense BayesC term in single- or multi-trait analyses with unit weights. Other methods and unsupported model modes keep copying. Set shared_genotypes=false for noncontiguous/repeated rows.
-  * fast_residual_updates=false preserves upstream residual arithmetic. BayesC block runs can opt into faster precision-matched BLAS with true; floating-point rounding can change seeded trajectories.
+  * BayesC block residual updates use in-place BLAS with multipliers matching the genotype element type; floating-point rounding can change seeded trajectories.
   * If `seed`, defaulting to `false`, is provided, a reproducible sequence of numbers will be generated for random number generation.
   * If `big_memory`=true, defaulting to `false`, a machine with  lots of memory is assumed which may speed up the analysis.
   * `fast_blocks` enables block marker updates. It can be `false`, `true`, a numeric block size, or a vector of explicit marker block starts such as `[1, 501, 1201]`.
@@ -197,7 +197,6 @@ function runMCMC(mme::MME,df;
                     only(mme.M).method == "BayesC" &&
                     only(mme.M).storage_mode == :dense && !only(mme.M).isGRM &&
                     !single_step_analysis && RRM == false && !heterogeneous_residuals),
-                fast_residual_updates::Bool      = false,
                 independent_blocks              = false,
                 memory_guard                    = :error,
                 memory_guard_ratio::Float64     = 0.80,
@@ -219,9 +218,6 @@ function runMCMC(mme::MME,df;
     if shared_genotypes
         validate_shared_genotypes(mme; single_step_analysis, RRM, double_precision)
     end
-
-    fast_residual_updates && (mme.M == 0 || any(Mi.method != "BayesC" for Mi in mme.M)) &&
-        error("fast_residual_updates=true is supported only for BayesC.")
 
     #for deprecated JWAS fucntions
     ############################################################################
@@ -492,7 +488,7 @@ function runMCMC(mme::MME,df;
     ############################################################################
     describe(mme)
     if RRM == false
-        mme.output=MCMC_BayesianAlphabet(mme,df;fast_residual_updates)
+        mme.output=MCMC_BayesianAlphabet(mme,df)
     else
         mme.output=MCMC_BayesianAlphabet_RRM(mme,df,
                                   Φ                        = RRM,

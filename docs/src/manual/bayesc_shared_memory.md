@@ -32,17 +32,17 @@ Use fast_blocks=false for the ordinary sampler and multi_trait_sampler=:II
 in get_genotypes to select multi-trait sampler II. Set single-/multi-trait
 priors G, R and Pi as required by the existing upstream API.
 
-## Residual compatibility and speed
+## Residual updates
 
-The default fast_residual_updates=false preserves upstream residual arithmetic.
-Single-trait and independent multi-trait blocks retain original multiplier types.
-Sequential multi-trait blocks reuse a product workspace and copy only the current
-alpha block, while retaining the upstream product-then-add evaluation order.
+BayesC blocks always update residuals in place using BLAS multipliers of the
+genotype block's element type. This applies to single- and multi-trait sequential
+and independent blocks, with no separate residual-mode option. Multi-trait
+sequential updates copy only the current alpha block and need no product workspace.
+The residual buffer keeps its existing element type; the update does not convert
+or replace it. Ordinary marker updates retain their existing arithmetic.
 
-Set fast_residual_updates=true to use in-place precision-matched BLAS residual
-updates for BayesC blocks. It can be faster, but different rounding can alter
-seeded stochastic trajectories. It is not a bitwise-compatibility mode.
-This option is restricted to BayesC and does not affect ordinary marker updates.
+Different floating-point rounding from upstream can alter seeded stochastic
+trajectories. Prediction formulas, priors and sampling schedules are unchanged.
 
 Views keep the entire genotype parent alive. Memory reports count unique parents
 and block Gram caches; they do not measure peak process RSS or other model state.
